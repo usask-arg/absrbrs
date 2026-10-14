@@ -6,19 +6,23 @@
 //! includes its effect through the default (∂/∂n_air includes the self term when n_self is
 //! absent, and ∂/∂δ_air the self shift when δ_self is absent).
 
-use super::{ATM, C2, Condition, FRAC_1E4_SQRT_PI, LineParameters, LineShape, T_REF, line_shape};
+use super::{
+    ATM, C2, Condition, FRAC_1E4_SQRT_PI, LineParameters, LineShape, T_REF, intensity_factor,
+    line_shape,
+};
 use crate::lines::LineField;
 
-/// ln(Q(T_ref)/Q(T)) and d ln Q/dT at the condition's temperature.
-#[allow(dead_code)] // used by the engine (phase 1c)
+/// The partition-function input of one isotopologue at the condition's temperature T.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PartitionRatio {
+    /// ln(Q(T_ref)/Q(T)) (dimensionless).
     pub log_q_ratio: f64,
+    /// d ln Q/dT at T, K⁻¹, from the same interpolant as Q (so ∂/∂T of `log_q_ratio` is
+    /// −`dlnq_dt`).
     pub dlnq_dt: f64,
 }
 
 /// ∂q/∂T (per K), ∂q/∂p (per Pa) and ∂q/∂VMR.
-#[allow(dead_code)] // used by the engine (phase 1c)
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct StateJacobian {
     pub temperature: LineShape<f64>,
@@ -87,60 +91,56 @@ impl Intermediates {
 }
 
 /// q and its derivatives with respect to T, p and VMR.
-#[allow(dead_code)] // used by the engine (phase 1c)
 pub(crate) fn line_shape_state_jacobian(
     c: &Condition<f64>,
     l: &LineParameters<f64>,
     p: PartitionRatio,
     mass: f64,
 ) -> (LineShape<f64>, StateJacobian) {
-    let m = Intermediates::new(c, l, p, mass);
-    let (q, t, vmr) = (m.q, m.t, c.vmr);
+    let im = Intermediates::new(c, l, p, mass);
+    let (q, t, x) = (im.q, im.t, c.vmr);
     // (u/T)/expm1(u) → 0 when expm1(u) overflows to ∞; never exp(−u)/(1 − exp(−u)).
-    let dln_a_dt = -p.dlnq_dt + C2 * l.e_lower / (t * t) - m.u / t / m.u.exp_m1() - 1.0 / (2.0 * t);
-    let temperature = m.derivative(
+    let dln_a_dt =
+        -p.dlnq_dt + C2 * l.e_lower / (t * t) - im.u / t / im.u.exp_m1() - 1.0 / (2.0 * t);
+    let d_temperature = im.derivative(
         q.amplitude * dln_a_dt,
-        l.deltap_air * m.p_air,
+        l.deltap_air * im.p_air,
         q.doppler_width / (2.0 * t),
-        -(l.n_air / t) * m.g_air * m.p_air - (m.n_self / t) * m.g_self * m.p_self,
+        -(l.n_air / t) * im.g_air * im.p_air - (im.n_self / t) * im.g_self * im.p_self,
     );
-    let pressure = m.derivative(
+    let d_pressure = im.derivative(
         0.0,
-        (m.shift_air * (1.0 - vmr) + m.delta_self * vmr) / ATM,
+        (im.shift_air * (1.0 - x) + im.delta_self * x) / ATM,
         0.0,
-        (m.g_air * (1.0 - vmr) + m.g_self * vmr) / ATM,
+        (im.g_air * (1.0 - x) + im.g_self * x) / ATM,
     );
-    let vmr = m.derivative(
+    let d_vmr = im.derivative(
         0.0,
-        m.p_atm * (m.delta_self - m.shift_air),
+        im.p_atm * (im.delta_self - im.shift_air),
         0.0,
-        m.p_atm * (m.g_self - m.g_air),
+        im.p_atm * (im.g_self - im.g_air),
     );
     (
         q,
         StateJacobian {
-            temperature,
-            pressure,
-            vmr,
+            temperature: d_temperature,
+            pressure: d_pressure,
+            vmr: d_vmr,
         },
     )
 }
 
 /// q and its derivatives with respect to every line field, indexed by `LineField as usize`.
-#[allow(dead_code)] // used by the engine (phase 1c)
 pub(crate) fn line_shape_line_jacobian(
     c: &Condition<f64>,
     l: &LineParameters<f64>,
     p: PartitionRatio,
     mass: f64,
 ) -> (LineShape<f64>, [LineShape<f64>; LineField::COUNT]) {
-    let m = Intermediates::new(c, l, p, mass);
-    let (q, t) = (m.q, m.t);
-    // The amplitude per unit S_ref, computed directly so that S_ref = 0 works. Same operations
-    // as in `line_shape`.
-    let stim = (-(C2 * l.nu / t)).exp_m1() / (-(C2 * l.nu / T_REF)).exp_m1();
-    let boltz = (-(C2 * l.e_lower) * (1.0 / t - 1.0 / T_REF)).exp();
-    let intensity = p.log_q_ratio.exp() * boltz * stim;
+    let im = Intermediates::new(c, l, p, mass);
+    let (q, t) = (im.q, im.t);
+    // The amplitude per unit S_ref, computed directly so that S_ref = 0 works.
+    let intensity = intensity_factor(t, l.nu, l.e_lower, p.log_q_ratio);
     let unit_amplitude = FRAC_1E4_SQRT_PI * intensity / q.doppler_width;
     let n_self_tied = l.n_self.is_none();
     let delta_self_tied = l.delta_self.is_none();
@@ -151,33 +151,33 @@ pub(crate) fn line_shape_line_jacobian(
         let (da, dc, ds, dg) = match field {
             LineField::Nu => (
                 // (c₂/T)/expm1(u) → 0 when expm1(u) overflows to ∞.
-                q.amplitude * (C2 / t / m.u.exp_m1() - C2 / T_REF / m.u_r.exp_m1() - 1.0 / l.nu),
+                q.amplitude * (C2 / t / im.u.exp_m1() - C2 / T_REF / im.u_r.exp_m1() - 1.0 / l.nu),
                 1.0,
                 q.doppler_width / l.nu,
                 0.0,
             ),
             LineField::SRef => (unit_amplitude, 0.0, 0.0, 0.0),
             LineField::ELower => (-q.amplitude * C2 * (1.0 / t - 1.0 / T_REF), 0.0, 0.0, 0.0),
-            LineField::GammaAir => (0.0, 0.0, 0.0, m.ratio.powf(l.n_air) * m.p_air),
-            LineField::GammaSelf => (0.0, 0.0, 0.0, m.ratio.powf(m.n_self) * m.p_self),
+            LineField::GammaAir => (0.0, 0.0, 0.0, im.ratio.powf(l.n_air) * im.p_air),
+            LineField::GammaSelf => (0.0, 0.0, 0.0, im.ratio.powf(im.n_self) * im.p_self),
             LineField::NAir => {
-                let own = m.ln_ratio * m.g_air * m.p_air;
+                let own = im.ln_ratio * im.g_air * im.p_air;
                 let through_default = if n_self_tied {
-                    m.ln_ratio * m.g_self * m.p_self
+                    im.ln_ratio * im.g_self * im.p_self
                 } else {
                     0.0
                 };
                 (0.0, 0.0, 0.0, own + through_default)
             }
-            LineField::NSelf => (0.0, 0.0, 0.0, m.ln_ratio * m.g_self * m.p_self),
+            LineField::NSelf => (0.0, 0.0, 0.0, im.ln_ratio * im.g_self * im.p_self),
             LineField::DeltaAir => {
-                let through_default = if delta_self_tied { m.p_self } else { 0.0 };
-                (0.0, m.p_air + through_default, 0.0, 0.0)
+                let through_default = if delta_self_tied { im.p_self } else { 0.0 };
+                (0.0, im.p_air + through_default, 0.0, 0.0)
             }
-            LineField::DeltapAir => (0.0, (t - T_REF) * m.p_air, 0.0, 0.0),
-            LineField::DeltaSelf => (0.0, m.p_self, 0.0, 0.0),
+            LineField::DeltapAir => (0.0, (t - T_REF) * im.p_air, 0.0, 0.0),
+            LineField::DeltaSelf => (0.0, im.p_self, 0.0, 0.0),
         };
-        jac[field as usize] = m.derivative(da, dc, ds, dg);
+        jac[field as usize] = im.derivative(da, dc, ds, dg);
     }
     (q, jac)
 }

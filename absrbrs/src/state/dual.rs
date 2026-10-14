@@ -97,9 +97,6 @@ impl<const N: usize> Real for Dual<N> {
     fn exp_m1(self) -> Self {
         self.chain(self.v.exp_m1(), self.v.exp())
     }
-    fn ln(self) -> Self {
-        self.chain(self.v.ln(), 1.0 / self.v)
-    }
     fn sqrt(self) -> Self {
         let s = self.v.sqrt();
         self.chain(s, 1.0 / (2.0 * s))

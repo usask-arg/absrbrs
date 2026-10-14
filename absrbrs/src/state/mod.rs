@@ -3,7 +3,7 @@
 //!
 //! Pressures are in atm: p_atm = p/101325, p_self = VMR·p_atm, p_air = (1 − VMR)·p_atm.
 //!
-//! - Intensity factor: f = S(T)/S_ref = exp(ln(Q(T_ref)/Q(T))) · exp(−c₂E″(1/T − 1/T_ref)) ·
+//! - Intensity factor: f = S(T)/S_ref = exp(ln(Q(T_ref)/Q(T)) − c₂E″(1/T − 1/T_ref)) ·
 //!   expm1(−c₂ν₀/T)/expm1(−c₂ν₀/T_ref).
 //! - Doppler width: σ_D = (ν₀/c) √(2k_B T/m), with m = mass·10⁻³/N_A kg.
 //! - Lorentz width: γ_L = (T_ref/T)^{n_air} γ_air p_air + (T_ref/T)^{n_self} γ_self p_self.
@@ -13,12 +13,14 @@
 //!
 //! An absent n_self defaults to n_air, and an absent δ_self to δ_air.
 
+// Nothing outside the tests calls into this module yet; test builds still lint dead code.
+#![cfg_attr(not(test), allow(dead_code, unused_imports))] // used by the engine (phase 1c)
+
 #[cfg(test)]
 mod dual;
 mod jacobian;
 mod real;
 
-#[allow(unused_imports)] // used by the engine (phase 1c)
 pub(crate) use jacobian::{
     PartitionRatio, StateJacobian, line_shape_line_jacobian, line_shape_state_jacobian,
 };
@@ -41,32 +43,43 @@ pub(crate) const N_A: f64 = 6.022_140_76e23;
 /// 10⁻⁴/√π: the cm² to m² conversion and the Voigt normalisation.
 const FRAC_1E4_SQRT_PI: f64 = 1e-4 * crate::faddeeva::FRAC_1_SQRT_PI;
 
-/// An atmospheric condition: temperature (K), pressure (Pa) and volume mixing ratio.
-#[allow(dead_code)] // used by the engine (phase 1c)
+/// An atmospheric condition.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Condition<R> {
+    /// Temperature T, K.
     pub temperature: R,
+    /// Total pressure p, Pa.
     pub pressure: R,
+    /// Volume mixing ratio of the absorber (dimensionless, 0 to 1).
     pub vmr: R,
 }
 
-/// The parameters of one line, in HITRAN units. `None` marks an absent optional field.
-#[allow(dead_code)] // used by the engine (phase 1c)
+/// The parameters of one line, in HITRAN units at T_ref = 296 K.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LineParameters<R> {
+    /// Line centre ν₀, cm⁻¹.
     pub nu: R,
+    /// Intensity S_ref at T_ref, cm⁻¹/(molecule cm⁻²).
     pub s_ref: R,
+    /// Lower-state energy E″, cm⁻¹.
     pub e_lower: R,
+    /// Air-broadened half width γ_air, cm⁻¹ atm⁻¹.
     pub gamma_air: R,
+    /// Self-broadened half width γ_self, cm⁻¹ atm⁻¹.
     pub gamma_self: R,
+    /// Temperature exponent n_air of γ_air (dimensionless).
     pub n_air: R,
+    /// Temperature exponent n_self of γ_self (dimensionless); `None` when absent, and then
+    /// n_air is used.
     pub n_self: Option<R>,
+    /// Air pressure shift δ_air at T_ref, cm⁻¹ atm⁻¹.
     pub delta_air: R,
+    /// Temperature coefficient δ′_air of the air shift, cm⁻¹ atm⁻¹ K⁻¹ (0 when absent).
     pub deltap_air: R,
+    /// Self pressure shift δ_self, cm⁻¹ atm⁻¹; `None` when absent, and then δ_air is used.
     pub delta_self: Option<R>,
 }
 
-#[allow(dead_code)] // used by the engine (phase 1c)
 impl LineParameters<f64> {
     /// The parameters of line `i` of a list: n_self and δ_self are `None` when absent, and an
     /// absent δ′_air is 0.
@@ -93,7 +106,6 @@ impl LineParameters<f64> {
 
 /// The shape quantities q of one line at one condition: σ(ν) = A·K(x, y) with
 /// x = (ν − ν₀′)/σ_D. Also used for derivatives of q, component by component.
-#[allow(dead_code)] // used by the engine (phase 1c)
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LineShape<R> {
     /// A, m²/molecule.
@@ -106,9 +118,22 @@ pub(crate) struct LineShape<R> {
     pub y: R,
 }
 
+/// The intensity factor f = S(T)/S_ref (see the module docs). Shared by [`line_shape`] and the
+/// S_ref derivative, so the two agree bitwise.
+fn intensity_factor<R: Real>(t: R, nu: R, e_lower: R, log_q_ratio: R) -> R {
+    let f = R::from_f64;
+    let tr = f(T_REF);
+    let stim = (-(f(C2) * nu / t)).exp_m1() / (-(f(C2) * nu / tr)).exp_m1();
+    (log_q_ratio - f(C2) * e_lower * (f(1.0) / t - f(1.0) / tr)).exp() * stim
+}
+
 /// q for one line at one condition (see the module docs for the formulas). `log_q_ratio` is
 /// ln(Q(T_ref)/Q(T)) and `mass` the isotopologue mass in g/mol.
-#[allow(dead_code)] // used by the engine (phase 1c)
+///
+/// Preconditions: T > 0, ν₀ > 0, mass > 0 and 0 ≤ VMR ≤ 1 (the engine checks them). q stays
+/// finite for ν₀ ≳ 1e-280 cm⁻¹, although [`LineList`] accepts any ν₀ > 0: A and y grow like
+/// 1/ν₀ (σ_D → 0), so below that their true values overflow. (The ν₀ derivatives, which grow
+/// like 1/ν₀², overflow likewise below about 1e-150 cm⁻¹.)
 pub(crate) fn line_shape<R: Real>(
     c: &Condition<R>,
     l: &LineParameters<R>,
@@ -121,9 +146,7 @@ pub(crate) fn line_shape<R: Real>(
     let p_air = (f(1.0) - c.vmr) * p;
     let t = c.temperature;
     let tr = f(T_REF);
-    let stim = (-(f(C2) * l.nu / t)).exp_m1() / (-(f(C2) * l.nu / tr)).exp_m1();
-    let boltz = (-(f(C2) * l.e_lower) * (f(1.0) / t - f(1.0) / tr)).exp();
-    let intensity = log_q_ratio.exp() * boltz * stim;
+    let intensity = intensity_factor(t, l.nu, l.e_lower, log_q_ratio);
     // 2k_B/m with m = mass·10⁻³/N_A kg.
     let sigma_d = l.nu / f(C_LIGHT) * (f(2.0 * K_B * N_A * 1e3 / mass) * t).sqrt();
     let ratio = tr / t;
@@ -153,19 +176,27 @@ mod dual_checks {
     type Line = (f64, f64, f64, f64, f64, f64, Option<f64>, f64, f64, Option<f64>);
 
     #[rustfmt::skip]
-    const LINES: [Line; 4] = [
+    const LINES: [Line; 8] = [
         (13100.5, 7.4e-24, 1200.0, 0.045, 0.047, 0.72, Some(0.70), -0.008, 1e-5, Some(-0.007)),
         (6300.25, 1.6e-23, 300.0, 0.07, 0.09, 0.75, None, -0.004, 0.0, None),
         // A microwave line: c₂ν₀/T is small.
         (0.75, 1e-24, 45.0, 0.1, 0.4, 0.68, None, 0.0, 0.0, None),
         (2140.0, 4e-19, 8000.0, 0.05, 0.06, 0.7, Some(0.6), -0.002, 0.0, Some(0.003)),
+        // Only δ_self tied, then only n_self tied: the tie rule field by field.
+        (4300.0, 2e-21, 500.0, 0.06, 0.08, 0.73, Some(0.66), -0.005, 2e-5, None),
+        (1600.0, 3e-20, 150.0, 0.08, 0.35, 0.69, None, -0.003, 0.0, Some(-0.006)),
+        // E″ = 0, n_air = 0 and S_ref = 0 (A = 0, but ∂A/∂S_ref is not).
+        (950.0, 0.0, 0.0, 0.06, 0.07, 0.0, None, -0.001, 0.0, None),
+        // A UV line: expm1(c₂ν₀/T) overflows to ∞ at low T.
+        (40000.0, 5e-22, 100.0, 0.05, 0.055, 0.75, Some(0.7), -0.01, 3e-6, Some(-0.012)),
     ];
-    const TEMPERATURES: [f64; 3] = [150.0, 296.0, 1500.0];
+    /// Isotopologue masses, g/mol, one per line.
+    const MASSES: [f64; 8] = [32.0, 44.0, 18.0, 28.0, 64.0, 16.0, 46.0, 48.0];
+    const TEMPERATURES: [f64; 5] = [1.0, 50.0, 150.0, 296.0, 1500.0];
     const PRESSURES: [f64; 3] = [0.0, 1000.0, 101_325.0];
     const VMRS: [f64; 3] = [0.0, 0.01, 1.0];
     const LOG_Q_RATIO: f64 = 0.37;
     const DLNQ_DT: f64 = 0.0042;
-    const MASS: f64 = 44.0;
 
     fn var(v: f64, field: LineField) -> D {
         D::variable(v, 3 + field as usize)
@@ -233,7 +264,7 @@ mod dual_checks {
     fn closed_forms_match_dual_numbers() {
         let mut worst = 0.0f64; // in units of the 1e-13 relative bound
         let mut cases = 0;
-        for line in &LINES {
+        for (line, mass) in LINES.iter().zip(MASSES) {
             let l = f64_line(line);
             let tied = l.n_self.is_none() || l.delta_self.is_none();
             for t in TEMPERATURES {
@@ -256,10 +287,11 @@ mod dual_checks {
                             log_q_ratio: LOG_Q_RATIO,
                             dlnq_dt: DLNQ_DT,
                         };
-                        let q = line_shape(&c, &l, LOG_Q_RATIO, MASS);
-                        let qd = line_shape(&cd, &dual_line(&l, false), lq, MASS);
-                        let (qs, js) = line_shape_state_jacobian(&c, &l, pr, MASS);
-                        let (ql, jl) = line_shape_line_jacobian(&c, &l, pr, MASS);
+                        let q = line_shape(&c, &l, LOG_Q_RATIO, mass);
+                        let qd = line_shape(&cd, &dual_line(&l, false), lq, mass);
+                        let (qs, js): (_, StateJacobian) =
+                            line_shape_state_jacobian(&c, &l, pr, mass);
+                        let (ql, jl) = line_shape_line_jacobian(&c, &l, pr, mass);
                         let name = format!("ν₀ = {}, T = {t}, p = {p}, VMR = {vmr}", l.nu);
                         for ((what, v), ((_, vd), ((_, vs), (_, vl)))) in
                             components(&q).into_iter().zip(
@@ -285,7 +317,7 @@ mod dual_checks {
                                 );
                             }
                         }
-                        let qt = tied.then(|| line_shape(&cd, &dual_line(&l, true), lq, MASS));
+                        let qt = tied.then(|| line_shape(&cd, &dual_line(&l, true), lq, mass));
                         for field in LineField::ALL {
                             let k = 3 + field as usize;
                             // The partial at the default needs the run with the default seeded.
@@ -373,8 +405,13 @@ mod reference {
         let mut n = 0;
         for line in text.lines().filter(|l| !l.trim().is_empty()) {
             let r: serde_json::Value = serde_json::from_str(line).unwrap();
-            let input = |name: &str| r["inputs"][name].as_f64();
-            let get = |name: &str| input(name).unwrap_or_else(|| panic!("input {name}"));
+            // A missing key is an error; only `null` means "absent" (n_self, δ_self).
+            let input = |name: &str| match r["inputs"].get(name) {
+                Some(serde_json::Value::Null) => None,
+                Some(v) => Some(v.as_f64().unwrap_or_else(|| panic!("input {name}: {v}"))),
+                None => panic!("{}: no input {name}", r["case"]),
+            };
+            let get = |name: &str| input(name).unwrap_or_else(|| panic!("input {name} is null"));
             let c = Condition {
                 temperature: get("temperature"),
                 pressure: get("pressure"),
@@ -401,7 +438,7 @@ mod reference {
                 let lo = out["lo"][0].as_f64().unwrap();
                 // An exact zero (y at p = 0) must be reproduced exactly.
                 let err = if hi == 0.0 {
-                    v.abs()
+                    if v == 0.0 { 0.0 } else { f64::INFINITY }
                 } else {
                     ((v - hi) - lo).abs() / hi.abs()
                 };
