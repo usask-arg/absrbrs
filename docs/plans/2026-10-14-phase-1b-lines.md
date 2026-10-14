@@ -319,7 +319,7 @@ Co-Authored-By: <your model> <noreply@anthropic.com>"
     - `has_value(LineField, usize) -> bool`
     - `select(molecule: Option<u16>, isotopologues: Option<&[u16]>, wavenumber: Option<(f64, f64)>) -> LineList`
     - `with_column(LineField, Vec<f64>) -> Result<LineList>`
-- Also produces a crate-private constructor, `LineList::from_unsorted(LineColumns)`, for use by the readers. It is the same as `from_columns`.
+- (Review change: `LineField` is `#[non_exhaustive]` with `LineField::COUNT = 10`; `LineList` equality treats NaN optional entries as equal; there is no separate crate-private constructor, the readers call `from_columns`.)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -709,7 +709,7 @@ Add `pub mod io;` to `lib.rs`.
   - the record must be ASCII and at least 160 bytes long; otherwise `Parse { path, line_number, message: "record is N bytes; HITRAN records are 160" }`, or "contains non-ASCII bytes".
 - **Fields.** Parse with `str::trim` and `parse::<f64>` (`parse::<u16>` for the molecule) from the byte ranges in the table above. A parse failure is `Parse`, with the message naming the field and the text, e.g. ``nu: cannot parse "abc.defgh"``.
 - **Isotopologue character:** `'1'..='9'` gives 1–9, `'0'` gives 10, and `'A'..='Z'` gives 11–36. Any other character is `Parse`.
-- **Skipping.** Records with `s_ref == 0.0` are skipped, as in sasktran2.
+- **Skipping.** Records with `s_ref == 0.0` are skipped, as in sasktran2, and so are records with `nu <= 0.0` (the line list requires ν₀ > 0). The opt-in local test reports how many records were skipped for ν₀ ≤ 0.
 - **Result.** Collect the columns, then call `LineList::from_columns`. Its `InvalidInput`, for example a negative width, is returned as is.
 - **Shared parser.** Expose the fixed-part parser as `pub(super) fn parse_fixed(record: &str, fields: &FixedLayout) -> std::result::Result<FixedRecord, String>`. The HAPI reader reuses it with its own offsets. `FixedLayout` gives the byte ranges of the nine fields; `FixedLayout::HITRAN` holds the defaults above.
 
@@ -724,7 +724,7 @@ Add `pub mod io;` to `lib.rs`.
   - Strip the line ending and skip empty lines.
   - Parse the fixed part with the layout, using the same ASCII and length rules, with the length taken as the largest start + width.
   - If there are extras, split the line by the separator. Chunk 0 is the fixed part, and extra k is chunk k + 1. A missing chunk, or a token that does not parse as f64 (`#`), gives NaN.
-  - Skip `s_ref == 0` as in the `.par` reader.
+  - Skip `s_ref == 0` and `nu <= 0` as in the `.par` reader.
 - **Result.** Columns for `n_self`, `delta_self` and `deltap_air` are `Some` exactly when the field is in `extra`.
 
 - [ ] **Step 4: Run the tests and checks**
@@ -1130,7 +1130,7 @@ Co-Authored-By: <your model> <noreply@anthropic.com>"
   - `pub(crate) struct PartitionRatio { pub log_q_ratio: f64, pub dlnq_dt: f64 }`;
   - `pub(crate) struct StateJacobian { pub temperature, pressure, vmr: LineShape<f64> }`;
   - `pub(crate) fn line_shape_state_jacobian(c: &Condition<f64>, l: &LineParameters<f64>, p: PartitionRatio, mass: f64) -> (LineShape<f64>, StateJacobian)`;
-  - `pub(crate) fn line_shape_line_jacobian(c: &Condition<f64>, l: &LineParameters<f64>, p: PartitionRatio, mass: f64) -> (LineShape<f64>, [LineShape<f64>; 10])`, indexed by `LineField as usize`.
+  - `pub(crate) fn line_shape_line_jacobian(c: &Condition<f64>, l: &LineParameters<f64>, p: PartitionRatio, mass: f64) -> (LineShape<f64>, [LineShape<f64>; LineField::COUNT])`, indexed by `LineField as usize`.
 
 Formulas (spec §5.2). Pressures are in atm: p_atm = p/101325, p_self = VMR·p_atm, p_air = (1 − VMR)·p_atm.
 - **Intensity factor:** f = S(T)/S_ref = exp(log_q_ratio) · exp(−c₂E″(1/T − 1/T_ref)) · expm1(−c₂ν₀/T)/expm1(−c₂ν₀/T_ref).
@@ -1621,8 +1621,11 @@ Create `docs/plans/phase-1b-followups.md`. Its sections:
   - The tie rule for absent optional fields refines spec §5.3.
   - The constants are exact SI.
   - The line-state layer stays crate-private until the phase 1c engine.
+  - Isotopologue masses come from one global table (`lines::isotopologue`), not from metadata held in each `LineList` as spec §5.6 has it; custom isotopologues and overridden masses are not possible yet.
+  - Python column accessors return read-only copies, not zero-copy views (spec §9.1 says nothing is copied per call); acceptable at line-list sizes, revisit if profiling shows otherwise.
+  - `with_column("nu", …)` re-sorts the list (documented); per-line arrays in the old order no longer line up.
 - **Measured:** the local reader timings from Task 3, the TIPS package size, the largest error against Arb, and the HAPI comparison.
-- **For phase 1c:** the engine resolves masses with `lines::isotopologue` and partition values with `PartitionFunction`. It computes `PartitionRatio` once per (condition, isotopologue).
+- **For phase 1c:** build each line's condition-independent `LineParameters` once in `LineByLine::new` (`value()` costs about 1.3 ns per call); the engine resolves masses with `lines::isotopologue` and partition values with `PartitionFunction`. It computes `PartitionRatio` once per (condition, isotopologue).
 - **For phase 2:** the AER line lists (local copy in sasktran2's database), and line mixing.
 
 In `CHANGELOG.md`, add entries under `[Unreleased]` → `### Added`. Update the README status to: phase 1b complete; phase 1c (cross-section engine) is next. In `CONTRIBUTING.md`, add the opt-in `ABSRBRS_HITRAN_LINES_DIR` test and the two `tools/` scripts with their regeneration commands.
