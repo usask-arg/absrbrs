@@ -2,11 +2,10 @@
 //! (the Python layer broadcasts and flattens); values are validated here.
 
 use absrbrs::faddeeva::{self, Complex64, Tier};
-use numpy::{IntoPyArray, PyArray1, PyArrayMethods};
-use pyo3::exceptions::PyBufferError;
+use numpy::{IntoPyArray, PyArray1};
 use pyo3::prelude::*;
 
-use crate::errors::{invalid, reserved};
+use crate::errors::{borrow, invalid, reserved};
 
 fn tier(py: Python<'_>, name: &str) -> PyResult<Tier> {
     match name {
@@ -31,9 +30,7 @@ pub fn faddeeva_w<'py>(
     Bound<'py, PyArray1<Complex64>>,
 )> {
     let tier = self::tier(py, tier)?;
-    let z = z
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
+    let z = borrow(&z)?;
     let z = z.as_slice()?;
     let mut w = reserved(z.len(), "w")?;
     let mut dw = reserved(z.len(), "dw")?;
@@ -70,12 +67,8 @@ pub fn voigt_kernel<'py>(
     Bound<'py, PyArray1<f64>>,
 )> {
     let tier = self::tier(py, tier)?;
-    let x = x
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
-    let y = y
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
+    let x = borrow(&x)?;
+    let y = borrow(&y)?;
     let (x, y) = (x.as_slice()?, y.as_slice()?);
     if x.len() != y.len() {
         return Err(invalid(

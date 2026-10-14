@@ -5,21 +5,11 @@
 use std::path::PathBuf;
 
 use absrbrs::lines::{self, LineColumns, LineField};
-use numpy::{IntoPyArray, PyArray1, PyArrayMethods, PyReadonlyArray1};
-use pyo3::exceptions::PyBufferError;
+use numpy::{IntoPyArray, PyArray1};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::errors::{copied, invalid, to_pyerr};
-
-/// A read-only borrow of `array`, or `BufferError` if it is being written to elsewhere.
-fn borrow<'py, T: numpy::Element>(
-    array: &Bound<'py, PyArray1<T>>,
-) -> PyResult<PyReadonlyArray1<'py, T>> {
-    array
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))
-}
+use crate::errors::{borrow, copied, invalid, to_pyerr};
 
 /// A copy of the values of `array`.
 fn to_vec<T: numpy::Element + Copy>(
@@ -111,7 +101,9 @@ impl PyLineList {
         self.inner.len()
     }
 
-    /// A copy of the column `name`, or `None` for an optional field absent for every line.
+    /// A copy of the column `name`, or `None` for an optional column that was not supplied (a
+    /// `.par` file never supplies one). An optional column whose entries are all NaN stays an
+    /// array.
     fn column<'py>(
         &self,
         py: Python<'py>,
@@ -170,7 +162,8 @@ pub fn molecule_id(py: Python<'_>, name: &str) -> PyResult<u16> {
 }
 
 /// The properties of an isotopologue: `formula`, `molecule_name`, `abundance`, `mass` (g/mol)
-/// and `global_id`.
+/// and `global_id`. `InvalidInputError` if the table does not have it; a number outside 0 to
+/// 65535 raises `OverflowError` (from the argument conversion).
 #[pyfunction]
 pub fn isotopologue_info(
     py: Python<'_>,

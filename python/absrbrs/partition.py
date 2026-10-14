@@ -16,8 +16,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from absrbrs import _absrbrs
-from absrbrs.lines import _molecule, _number
-from absrbrs.special import _numeric
+from absrbrs._convert import molecule as to_molecule
+from absrbrs._convert import number, numeric
 
 __all__ = ["tips2021"]
 
@@ -44,7 +44,8 @@ def tips2021(
     Raises
     ------
     TypeError
-        If ``temperature`` is not real numbers.
+        If ``molecule`` is not an int or a str, ``isotopologue`` is not an int (a bool is
+        rejected too), or ``temperature`` is not real numbers.
     InvalidInputError
         If ``molecule`` is an unknown name, or a number does not fit 0 to 65535.
     MissingPartitionFunctionError
@@ -57,8 +58,8 @@ def tips2021(
     MemoryError
         If the outputs cannot be allocated.
     """
-    array = np.asarray(_numeric("temperature", temperature, "iuf", "real numbers"), np.float64)
+    array = np.asarray(numeric("temperature", temperature, "iuf", "real numbers"), np.float64)
     q, dlnq_dt = _absrbrs.tips2021(
-        _molecule(molecule), _number("isotopologue", isotopologue), array.ravel()
+        to_molecule(molecule), number("isotopologue", isotopologue), array.ravel()
     )
     return q.reshape(array.shape), dlnq_dt.reshape(array.shape)

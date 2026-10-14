@@ -42,3 +42,52 @@ def test_tables_that_start_above_1_k():
         partition.tips2021("CH3", 1, 1.0)
     with pytest.raises(TypeError):
         partition.tips2021(2, 1, [296.0 + 0j])
+
+
+LAYOUTS = {
+    "fortran-order": np.asfortranarray,
+    "big-endian": lambda a: a.astype(a.dtype.newbyteorder("S")),
+    "reversed-view": lambda a: a[::-1, ::-1],
+    "strided": lambda a: np.repeat(a, 2, axis=1)[:, ::2],
+}
+
+
+@pytest.mark.parametrize("layout", LAYOUTS.values(), ids=LAYOUTS.keys())
+def test_memory_layout_does_not_matter(layout):
+    t = np.linspace(150.0, 900.0, 12).reshape(3, 4)
+    view = layout(t)
+    for got, expected in zip(
+        partition.tips2021(2, 1, view),
+        partition.tips2021(2, 1, np.ascontiguousarray(view)),
+        strict=True,
+    ):
+        assert got.shape == (3, 4)
+        np.testing.assert_array_equal(got, expected)
+
+
+def test_integer_arguments_are_accepted():
+    for got, expected in zip(
+        partition.tips2021(np.int64(2), np.uint16(1), [296, 300]),
+        partition.tips2021(2, 1, [296.0, 300.0]),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(got, expected)
+
+
+def test_empty_input_gives_empty_outputs():
+    q, d = partition.tips2021(2, 1, [])
+    assert q.shape == d.shape == (0,)
+    assert q.dtype == d.dtype == np.float64
+    q, d = partition.tips2021(2, 1, np.zeros((0, 3)))
+    assert q.shape == d.shape == (0, 3)
+
+
+def test_argument_types_and_ranges():
+    for molecule, isotopologue in [(True, 1), (2, True), (2.0, 1), (2, 1.0)]:
+        with pytest.raises(TypeError):
+            partition.tips2021(molecule, isotopologue, 296.0)
+    with pytest.raises(absrbrs.InvalidInputError, match=r"^invalid input: isotopologue 70000"):
+        partition.tips2021(2, 70000, 296.0)
+    with pytest.raises(absrbrs.OutsideTableError) as info:
+        partition.tips2021(2, 1, np.array([[296.0, 1e5], [1e6, 296.0]]))
+    assert info.value.temperature == 1e5  # the first in C order

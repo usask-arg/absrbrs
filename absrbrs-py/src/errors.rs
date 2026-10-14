@@ -1,8 +1,10 @@
 //! Conversion of `absrbrs::Error` into the exception classes defined in `absrbrs.errors`, and
 //! the error helpers shared by the bindings.
 
+use numpy::{Element, PyArray1, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::{
-    PyException, PyFileNotFoundError, PyMemoryError, PyOSError, PyPermissionError, PyRuntimeError,
+    PyBufferError, PyException, PyFileNotFoundError, PyMemoryError, PyOSError, PyPermissionError,
+    PyRuntimeError,
 };
 use pyo3::prelude::*;
 
@@ -72,6 +74,15 @@ pub fn to_pyerr(py: Python<'_>, err: absrbrs::Error) -> PyErr {
 /// The `InvalidInputError` for `message`.
 pub fn invalid(py: Python<'_>, message: String) -> PyErr {
     to_pyerr(py, absrbrs::Error::InvalidInput(message))
+}
+
+/// A read-only borrow of `array`, or `BufferError` if it is being written to elsewhere.
+pub fn borrow<'py, T: Element>(
+    array: &Bound<'py, PyArray1<T>>,
+) -> PyResult<PyReadonlyArray1<'py, T>> {
+    array
+        .try_readonly()
+        .map_err(|e| PyBufferError::new_err(e.to_string()))
 }
 
 /// An empty vector with room for `len` values, or `MemoryError` (spec §9.2: fallible allocation).

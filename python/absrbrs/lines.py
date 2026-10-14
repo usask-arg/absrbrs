@@ -8,65 +8,20 @@ use HITRAN's numbering (molecule 2 is CO2; local isotopologue 1 is the most abun
 
 from __future__ import annotations
 
-import operator
 import os
-from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from absrbrs import _absrbrs
-from absrbrs.errors import InvalidInputError
-from absrbrs.special import _numeric
+from absrbrs._convert import molecule as to_molecule
+from absrbrs._convert import numbers, read_only, real, reals
 
 __all__ = ["LineList"]
 
-_U16_MAX = np.iinfo(np.uint16).max
 
-
-def _number(name: str, value: int) -> int:
-    """A HITRAN molecule or isotopologue number, checked to fit an unsigned 16-bit integer."""
-    if isinstance(value, bool | np.bool_):
-        raise TypeError(f"{name} must be an int, not a bool")
-    number = operator.index(value)
-    if not 0 <= number <= _U16_MAX:
-        raise InvalidInputError(f"{name} {number} is outside 0 to {_U16_MAX}")
-    return number
-
-
-def _molecule(molecule: int | str) -> int:
-    """The HITRAN number of a molecule given by number or by name (``"CO2"``)."""
-    if isinstance(molecule, str):
-        return _absrbrs.molecule_id(molecule)
-    return _number("molecule", molecule)
-
-
-def _one_dimensional(name: str, array: NDArray[Any]) -> NDArray[Any]:
-    if array.ndim != 1:
-        raise InvalidInputError(f"{name} must be 1-D, not {array.ndim}-D")
-    return np.ascontiguousarray(array)
-
-
-def _numbers(name: str, values: ArrayLike) -> NDArray[np.uint16]:
-    """A 1-D uint16 array of HITRAN numbers, checked to fit."""
-    array = np.asarray(values)
-    if array.size == 0 and array.dtype.kind == "f":
-        array = array.astype(np.uint16)  # an empty list is float64 to numpy
-    array = _numeric(name, array, "iu", "integers")
-    if array.size and (array.min() < 0 or array.max() > _U16_MAX):
-        raise InvalidInputError(f"{name} has values outside 0 to {_U16_MAX}")
-    return _one_dimensional(name, array.astype(np.uint16))
-
-
-def _reals(name: str, values: ArrayLike) -> NDArray[np.float64]:
-    """A 1-D float64 array of real numbers."""
-    array = np.asarray(_numeric(name, values, "iuf", "real numbers"), dtype=np.float64)
-    return _one_dimensional(name, array)
-
-
-def _read_only(array: NDArray[Any]) -> NDArray[Any]:
-    array.flags.writeable = False
-    return array
+def _column(name: str, values: ArrayLike) -> NDArray[np.float64]:
+    return reals(name, f"line column `{name}`", values)
 
 
 class LineList:
@@ -77,8 +32,9 @@ class LineList:
     not public.
 
     Every column property returns a fresh read-only copy, in the sorted order. The optional
-    columns (``n_self``, ``delta_self``, ``deltap_air``) are ``None`` when absent for every line,
-    and a NaN entry means "absent for this line"; an absent n_self defaults to n_air, an absent
+    columns (``n_self``, ``delta_self``, ``deltap_air``) are ``None`` when the column was not
+    supplied (a ``.par`` file never supplies them); a NaN entry means "absent for this line",
+    and a column of all NaN stays an array. An absent n_self defaults to n_air, an absent
     delta_self to delta_air, and an absent deltap_air to 0.
     """
 
@@ -102,8 +58,10 @@ class LineList:
     def from_hitran(cls, path: str | os.PathLike[str]) -> LineList:
         """Read a HITRAN ``.par`` file (160-byte fixed-width records).
 
-        Records with S_ref = 0 or nu <= 0 are skipped, and so are empty lines. The optional
-        columns are absent: a ``.par`` record does not carry them.
+        The isotopologue code of a record (column 3) maps to HITRAN's local isotopologue
+        number: ``"1"`` to ``"9"`` are 1 to 9, ``"0"`` is 10, and ``"A"``, ``"B"``, ... are 11,
+        12, .... Records with S_ref = 0 or nu <= 0 are skipped, and so are empty lines. The
+        optional columns are ``None``: a ``.par`` record does not carry them.
 
         Parameters
         ----------
@@ -121,7 +79,7 @@ class LineList:
         ParseError
             If a record is malformed; ``line_number`` is its line in the file.
         """
-        return cls._wrap(_absrbrs.LineList.from_hitran(os.fspath(path)))
+        return cls._wrap(_absrbrs.LineList.from_hitran(path))
 
     @classmethod
     def from_hapi(cls, directory: str | os.PathLike[str], table: str) -> LineList:
@@ -150,7 +108,7 @@ class LineList:
         ParseError
             If the header or a record is malformed.
         """
-        return cls._wrap(_absrbrs.LineList.from_hapi(os.fspath(directory), table))
+        return cls._wrap(_absrbrs.LineList.from_hapi(directory, table))
 
     @classmethod
     def from_arrays(
@@ -178,7 +136,8 @@ class LineList:
         nu : array_like
             Line centres, cm^-1 (positive).
         s_ref : array_like
-            Intensities at 296 K, cm^-1/(molecule cm^-2) (non-negative).
+            Intensities at 296 K, cm^-1/(molecule cm^-2) (non-negative). As in HITRAN, they
+            include the natural abundance of the isotopologue.
         e_lower : array_like
             Lower-state energies, cm^-1.
         gamma_air, gamma_self : array_like
@@ -191,7 +150,8 @@ class LineList:
         n_self, delta_self, deltap_air : array_like, optional
             Temperature exponent of the self-broadened half-width, self pressure shift
             (cm^-1 atm^-1) and temperature coefficient of the air shift (cm^-1 atm^-1 K^-1).
-            ``None`` means absent for every line, and a NaN entry absent for that line.
+            ``None`` means the column is not supplied (absent for every line), and a NaN entry
+            absent for that line.
 
         Returns
         -------
@@ -205,21 +165,25 @@ class LineList:
             If a column is not 1-D, the columns differ in length, a required value is not
             finite, nu <= 0, S_ref or a half-width is negative, an optional value is infinite,
             or a molecule or isotopologue number does not fit 0 to 65535.
+        BufferError
+            If the extension cannot borrow an array (it is being written to elsewhere).
+        MemoryError
+            If the list cannot be allocated.
         """
 
         def optional(name: str, values: ArrayLike | None) -> NDArray[np.float64] | None:
-            return None if values is None else _reals(name, values)
+            return None if values is None else _column(name, values)
 
         inner = _absrbrs.LineList.from_columns(
-            _numbers("molecule", molecule),
-            _numbers("isotopologue", isotopologue),
-            _reals("nu", nu),
-            _reals("s_ref", s_ref),
-            _reals("e_lower", e_lower),
-            _reals("gamma_air", gamma_air),
-            _reals("gamma_self", gamma_self),
-            _reals("n_air", n_air),
-            _reals("delta_air", delta_air),
+            numbers("molecule", "line column `molecule`", molecule),
+            numbers("isotopologue", "line column `isotopologue`", isotopologue),
+            _column("nu", nu),
+            _column("s_ref", s_ref),
+            _column("e_lower", e_lower),
+            _column("gamma_air", gamma_air),
+            _column("gamma_self", gamma_self),
+            _column("n_air", n_air),
+            _column("delta_air", delta_air),
             optional("n_self", n_self),
             optional("delta_self", delta_self),
             optional("deltap_air", deltap_air),
@@ -235,26 +199,27 @@ class LineList:
             return "LineList(0 lines)"
         molecules = ", ".join(str(m) for m in np.unique(self.molecule))
         nu = self.nu
-        return f"LineList({n} lines, molecules [{molecules}], nu {nu[0]:g} to {nu[-1]:g} cm^-1)"
+        lines = "1 line" if n == 1 else f"{n} lines"
+        return f"LineList({lines}, molecules [{molecules}], nu {nu[0]:g} to {nu[-1]:g} cm^-1)"
 
     def _required(self, name: str) -> NDArray[np.float64]:
         column = self._inner.column(name)
         assert column is not None  # the required columns are always present
-        return _read_only(column)
+        return read_only(column)
 
     def _optional(self, name: str) -> NDArray[np.float64] | None:
         column = self._inner.column(name)
-        return None if column is None else _read_only(column)
+        return None if column is None else read_only(column)
 
     @property
     def molecule(self) -> NDArray[np.uint16]:
         """HITRAN molecule numbers (uint16)."""
-        return _read_only(self._inner.molecule())
+        return read_only(self._inner.molecule())
 
     @property
     def isotopologue(self) -> NDArray[np.uint16]:
         """HITRAN local isotopologue numbers (uint16)."""
-        return _read_only(self._inner.isotopologue())
+        return read_only(self._inner.isotopologue())
 
     @property
     def nu(self) -> NDArray[np.float64]:
@@ -263,7 +228,7 @@ class LineList:
 
     @property
     def s_ref(self) -> NDArray[np.float64]:
-        """Intensities at 296 K, cm^-1/(molecule cm^-2)."""
+        """Intensities at 296 K, cm^-1/(molecule cm^-2), including the natural abundance."""
         return self._required("s_ref")
 
     @property
@@ -293,17 +258,18 @@ class LineList:
 
     @property
     def n_self(self) -> NDArray[np.float64] | None:
-        """Temperature exponents of the self-broadened half-width, or None if absent."""
+        """Temperature exponents of the self-broadened half-width, or None if not supplied."""
         return self._optional("n_self")
 
     @property
     def delta_self(self) -> NDArray[np.float64] | None:
-        """Self pressure shifts at 296 K and 1 atm, cm^-1 atm^-1, or None if absent."""
+        """Self pressure shifts at 296 K and 1 atm, cm^-1 atm^-1, or None if not supplied."""
         return self._optional("delta_self")
 
     @property
     def deltap_air(self) -> NDArray[np.float64] | None:
-        """Temperature coefficients of the air shift, cm^-1 atm^-1 K^-1, or None if absent."""
+        """Temperature coefficients of the air shift, cm^-1 atm^-1 K^-1, or None if not
+        supplied."""
         return self._optional("deltap_air")
 
     def select(
@@ -319,8 +285,9 @@ class LineList:
         ----------
         molecule : int or str, optional
             A HITRAN molecule number, or a molecule name such as ``"CO2"`` (case-sensitive).
-        isotopologues : array_like of int, optional
-            HITRAN local isotopologue numbers; an empty sequence selects nothing.
+        isotopologues : int or array_like of int, optional
+            HITRAN local isotopologue numbers (one, or a 1-D sequence); an empty sequence
+            selects nothing.
         wavenumber : tuple of float, optional
             An inclusive range ``(lo, hi)`` of line centres, cm^-1; ``lo > hi`` or a NaN bound
             selects nothing.
@@ -333,19 +300,27 @@ class LineList:
         Raises
         ------
         TypeError
-            If ``isotopologues`` is not integers.
+            If ``molecule`` is not an int or a str, ``isotopologues`` is not integers, or a
+            bound of ``wavenumber`` is not a real number.
+        ValueError
+            If ``wavenumber`` does not have two items.
         InvalidInputError
-            If ``molecule`` is an unknown name, or a number does not fit 0 to 65535.
+            If ``molecule`` is an unknown name, a number does not fit 0 to 65535, or
+            ``isotopologues`` has more than one dimension.
+        BufferError
+            If the extension cannot borrow the isotopologue array.
+        MemoryError
+            If the result cannot be allocated.
         """
-        lo_hi = None if wavenumber is None else (float(wavenumber[0]), float(wavenumber[1]))
-        inner = self._inner.select(
-            None if molecule is None else _molecule(molecule),
-            None
-            if isotopologues is None
-            else _numbers("isotopologues", np.atleast_1d(np.asarray(isotopologues))),
-            lo_hi,
-        )
-        return self._wrap(inner)
+        bounds = None
+        if wavenumber is not None:
+            lo, hi = wavenumber
+            bounds = (real("wavenumber", lo), real("wavenumber", hi))
+        isotopes = None
+        if isotopologues is not None:
+            isotopes = numbers("isotopologues", "isotopologues", np.atleast_1d(isotopologues))
+        molecule_id = None if molecule is None else to_molecule(molecule)
+        return self._wrap(self._inner.select(molecule_id, isotopes, bounds))
 
     def with_column(self, name: str, values: ArrayLike) -> LineList:
         """A copy of the list with one column replaced.
@@ -371,7 +346,11 @@ class LineList:
         TypeError
             If ``values`` is not real numbers.
         InvalidInputError
-            If ``name`` is unknown, or ``values`` has the wrong length or an invalid entry (by
-            the rules of :meth:`from_arrays`).
+            If ``name`` is unknown, or ``values`` is not 1-D or has the wrong length or an
+            invalid entry (by the rules of :meth:`from_arrays`).
+        BufferError
+            If the extension cannot borrow the array (it is being written to elsewhere).
+        MemoryError
+            If the list cannot be allocated.
         """
-        return self._wrap(self._inner.with_column(name, _reals(name, values)))
+        return self._wrap(self._inner.with_column(name, _column(name, values)))

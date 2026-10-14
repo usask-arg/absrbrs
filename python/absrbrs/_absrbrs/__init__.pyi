@@ -1,4 +1,5 @@
 # Stubs for the extension module absrbrs._absrbrs (a stub package, for its _testing submodule).
+import os
 from typing import Final, TypedDict, final
 
 import numpy as np
@@ -28,9 +29,9 @@ def voigt_kernel(
 @final
 class LineList:
     @staticmethod
-    def from_hitran(path: str) -> LineList: ...
+    def from_hitran(path: str | os.PathLike[str]) -> LineList: ...
     @staticmethod
-    def from_hapi(directory: str, table: str) -> LineList: ...
+    def from_hapi(directory: str | os.PathLike[str], table: str) -> LineList: ...
     @staticmethod
     def from_columns(
         molecule: NDArray[np.uint16],

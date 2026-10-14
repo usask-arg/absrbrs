@@ -2,11 +2,10 @@
 //! contiguous array (the Python layer broadcasts and flattens); values are validated by the core.
 
 use absrbrs::partition::{self, PartitionFunction};
-use numpy::{IntoPyArray, PyArray1, PyArrayMethods};
-use pyo3::exceptions::PyBufferError;
+use numpy::{IntoPyArray, PyArray1};
 use pyo3::prelude::*;
 
-use crate::errors::{reserved, to_pyerr};
+use crate::errors::{borrow, reserved, to_pyerr};
 
 /// TIPS-2021 Q(T) and d ln Q/dT (K⁻¹) of an isotopologue at every temperature (K).
 #[pyfunction]
@@ -17,9 +16,7 @@ pub fn tips2021<'py>(
     isotopologue: u16,
     temperature: Bound<'py, PyArray1<f64>>,
 ) -> PyResult<(Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>)> {
-    let temperature = temperature
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
+    let temperature = borrow(&temperature)?;
     let temperature = temperature.as_slice()?;
     let mut q = reserved(temperature.len(), "Q")?;
     let mut dlnq_dt = reserved(temperature.len(), "dlnQ/dT")?;
