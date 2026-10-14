@@ -114,9 +114,9 @@ Recorded from the phase 0 task reviews.
 ## Licence gates
 
 Outcomes of the phase 0 licence checks (Task 6). The details and sources are in
-`THIRD_PARTY.md`. Every row there is pending maintainer confirmation. Phase 1a may not merge
-the Faddeeva Package port, and phase 1b may not commit the TIPS-2021 tables, until a maintainer
-has confirmed those rows (name and date) in `THIRD_PARTY.md`.
+`THIRD_PARTY.md`. Every row there was confirmed by Daniel Zawada on 2026-10-14, so the
+Faddeeva Package port (phase 1a) and the TIPS-2021 tables (phase 1b) may proceed under the
+conditions below.
 
 - **Faddeeva Package (phase 1a): conditions.** It is MIT-licensed, so the Accurate-tier port
   may proceed once a maintainer has confirmed the row. The ported Rust file must carry the "Copyright (c) 2012 Massachusetts Institute
