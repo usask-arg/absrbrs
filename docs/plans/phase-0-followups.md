@@ -119,8 +119,8 @@ Faddeeva Package port (phase 1a) and the TIPS-2021 tables (phase 1b) may proceed
 conditions below.
 
 - **Faddeeva Package (phase 1a): conditions.** It is MIT-licensed, so the Accurate-tier port
-  may proceed once a maintainer has confirmed the row. The ported Rust file must carry the "Copyright (c) 2012 Massachusetts Institute
-  of Technology" notice and the MIT permission notice in its header. Wheels contain no Rust
+  may proceed (row confirmed 2026-10-14). The ported Rust file must carry the "Copyright (c)
+  2012 Massachusetts Institute of Technology" notice and the MIT permission notice in its header. Wheels contain no Rust
   source, and `pyproject.toml` has `license-files = ["LICENSE"]`. So in the same commit as the
   port, add a notice file inside the crate package (e.g. `absrbrs/LICENSES/Faddeeva-MIT.txt`)
   and list it in `pyproject.toml` `license-files`. Port from `Faddeeva.cc` only (SHA-256
@@ -128,9 +128,9 @@ conditions below.
   (Poppe–Wijers).
 - **TIPS-2021 (phase 1b): conditions.** The Zenodo record (10.5281/zenodo.4708099) is
   MIT-licensed, the paper (section 4) says the codes all use the MIT licence, and HAPI already
-  redistributes the tables under MIT. The built-in tables may therefore be committed once a
-  maintainer has confirmed the row. The
-  HAPI-based builder is not required; user-supplied tables remain in scope (spec §5.5).
+  redistributes the tables under MIT. The built-in tables may therefore be committed (row
+  confirmed 2026-10-14). The HAPI-based builder is not required; user-supplied tables remain in
+  scope (spec §5.5).
   Obligations:
   - Ship the copyright notice (Robert Gamache, 2021) and the MIT permission notice with the
     embedded data. In the same commit as the data, add a notice file inside the crate package
