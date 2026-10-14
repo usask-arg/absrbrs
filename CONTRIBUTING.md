@@ -26,6 +26,7 @@ cargo build --workspace --lib
 RUSTDOCFLAGS="-D warnings" cargo doc -p absrbrs --no-deps --document-private-items
 cargo check --workspace --target s390x-unknown-linux-gnu   # rustup target add s390x-unknown-linux-gnu
 cargo test --workspace
+cargo test -p absrbrs --bench faddeeva   # runs each benchmark once; timing is not checked
 cargo +1.85.0 check --workspace --lib   # the MSRV: rustup toolchain install 1.85.0
 cargo package -p absrbrs                # add --allow-dirty while changes are uncommitted
 uv run ruff check .
@@ -38,6 +39,8 @@ uv run --directory prototypes/faddeeva python -m pytest
 uv run --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
 uvx --from actionlint-py==1.7.12.25 actionlint   # after changing .github/workflows
 ```
+
+Wall-clock benchmarks of the Faddeeva kernels: `cargo bench -p absrbrs --bench faddeeva`.
 
 CI also tests the packaged crate on its own, as `cargo test` on the crates.io sources would:
 extract `target/package/absrbrs-*.crate` outside the repository and run `cargo test --locked`

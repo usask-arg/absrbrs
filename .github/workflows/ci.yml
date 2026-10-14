@@ -46,6 +46,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Build the libraries
         run: cargo build --workspace --lib --locked
+      - name: Run each benchmark once (criterion's test mode; timing is not checked)
+        run: cargo test -p absrbrs --bench faddeeva --locked
       - name: Rustdoc, private items included (warnings are errors)
         env:
           RUSTDOCFLAGS: "-D warnings"
