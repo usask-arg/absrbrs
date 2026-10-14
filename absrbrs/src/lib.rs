@@ -9,6 +9,7 @@ pub mod faddeeva;
 pub mod io;
 pub mod lines;
 pub mod partition;
+mod state;
 #[cfg(test)]
 mod test_data;
 
