@@ -5,7 +5,7 @@
 use super::isotopologues::Isotopologue;
 
 #[rustfmt::skip]
-pub(crate) const ISOTOPOLOGUES: [Isotopologue; 156] = [
+pub(crate) static ISOTOPOLOGUES: [Isotopologue; 156] = [
     Isotopologue { molecule: 1, isotopologue: 1, global_id: 1, formula: "H2(16O)", molecule_name: "H2O", abundance: 0.9973173, mass: 18.010565 },
     Isotopologue { molecule: 1, isotopologue: 2, global_id: 2, formula: "H2(18O)", molecule_name: "H2O", abundance: 0.001999827, mass: 20.014811 },
     Isotopologue { molecule: 1, isotopologue: 3, global_id: 3, formula: "H2(17O)", molecule_name: "H2O", abundance: 0.0003718841, mass: 19.01478 },

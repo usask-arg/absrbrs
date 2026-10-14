@@ -5,8 +5,10 @@ use crate::{Error, Result};
 /// A per-line floating-point parameter of a spectral line.
 ///
 /// The discriminants index the column storage of a [`LineList`], so the declaration order is
-/// part of the contract: use `field as usize` to index per-field arrays.
+/// part of the contract: use `field as usize` to index per-field arrays of length
+/// [`COUNT`](Self::COUNT). The set of fields will grow in later phases, hence `non_exhaustive`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum LineField {
     /// Line centre ν₀, cm⁻¹.
     Nu,
@@ -31,8 +33,11 @@ pub enum LineField {
 }
 
 impl LineField {
+    /// The number of fields. It will grow in later phases, so use it rather than a literal.
+    pub const COUNT: usize = 10;
+
     /// Every field, in declaration (storage) order.
-    pub const ALL: [LineField; 10] = [
+    pub const ALL: [LineField; Self::COUNT] = [
         LineField::Nu,
         LineField::SRef,
         LineField::ELower,
@@ -101,7 +106,10 @@ impl LineField {
 ///
 /// All columns must have the same length. In the optional columns a NaN entry means "absent for
 /// this line", and a `None` column means "absent for every line".
-#[derive(Clone, Debug, Default, PartialEq)]
+///
+/// Equality treats NaN entries as equal to each other, so that a value equals its clone. A
+/// `None` column and an all-NaN column are not equal, although they resolve to the same values.
+#[derive(Clone, Debug, Default)]
 pub struct LineColumns {
     /// HITRAN molecule number of each line.
     pub molecule: Vec<u16>,
@@ -129,18 +137,76 @@ pub struct LineColumns {
     pub deltap_air: Option<Vec<f64>>,
 }
 
+impl PartialEq for LineColumns {
+    fn eq(&self, other: &Self) -> bool {
+        self.molecule == other.molecule
+            && self.isotopologue == other.isotopologue
+            && [
+                (&self.nu, &other.nu),
+                (&self.s_ref, &other.s_ref),
+                (&self.e_lower, &other.e_lower),
+                (&self.gamma_air, &other.gamma_air),
+                (&self.gamma_self, &other.gamma_self),
+                (&self.n_air, &other.n_air),
+                (&self.delta_air, &other.delta_air),
+            ]
+            .into_iter()
+            .all(|(a, b)| same_values(a, b))
+            && [
+                (&self.n_self, &other.n_self),
+                (&self.delta_self, &other.delta_self),
+                (&self.deltap_air, &other.deltap_air),
+            ]
+            .into_iter()
+            .all(|(a, b)| same_optional_values(a.as_deref(), b.as_deref()))
+    }
+}
+
+/// Whether two columns have the same length and entries, NaN equalling NaN.
+fn same_values(a: &[f64], b: &[f64]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| x == y || (x.is_nan() && y.is_nan()))
+}
+
+/// [`same_values`] for optional columns: an absent column only equals an absent column.
+fn same_optional_values(a: Option<&[f64]>, b: Option<&[f64]>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => same_values(a, b),
+        _ => false,
+    }
+}
+
 /// An immutable list of spectral lines, stored as columns and sorted by wavenumber.
 ///
 /// Every line index (in [`value`](Self::value), [`has_value`](Self::has_value) and the
 /// positions within [`column`](Self::column)) refers to this sorted order. The seven required
 /// fields are always present; the optional ones resolve to their defaults, see
 /// [`value`](Self::value).
-#[derive(Clone, Debug, PartialEq)]
+///
+/// Equality treats NaN entries as equal to each other, so that a list equals its clone. An
+/// optional column that is absent and one whose entries are all NaN are not equal, although
+/// they resolve to the same values.
+#[derive(Clone, Debug)]
 pub struct LineList {
     molecule: Vec<u16>,
     isotopologue: Vec<u16>,
     /// Indexed by `LineField as usize`; the required fields are always `Some`.
-    columns: [Option<Vec<f64>>; 10],
+    columns: [Option<Vec<f64>>; LineField::COUNT],
+}
+
+impl PartialEq for LineList {
+    fn eq(&self, other: &Self) -> bool {
+        self.molecule == other.molecule
+            && self.isotopologue == other.isotopologue
+            && self
+                .columns
+                .iter()
+                .zip(&other.columns)
+                .all(|(a, b)| same_optional_values(a.as_deref(), b.as_deref()))
+    }
 }
 
 /// Checks that a column has `expected` entries and that every entry is valid for `field`.
@@ -201,7 +267,7 @@ impl LineList {
             delta_self,
             deltap_air,
         } = columns;
-        let mut storage: [Option<Vec<f64>>; 10] = Default::default();
+        let mut storage: [Option<Vec<f64>>; LineField::COUNT] = std::array::from_fn(|_| None);
         let fields = [
             (LineField::Nu, Some(nu)),
             (LineField::SRef, Some(s_ref)),
@@ -229,13 +295,6 @@ impl LineList {
         Ok(list)
     }
 
-    /// Same as [`from_columns`](Self::from_columns); the entry point for the file readers.
-    // The readers arrive in later tasks.
-    #[allow(dead_code)]
-    pub(crate) fn from_unsorted(columns: LineColumns) -> Result<LineList> {
-        LineList::from_columns(columns)
-    }
-
     /// Stably sorts every column by wavenumber.
     fn sort_by_nu(&mut self) {
         let nu = self.nu();
@@ -244,15 +303,17 @@ impl LineList {
         }
         let mut order: Vec<usize> = (0..nu.len()).collect();
         order.sort_by(|&a, &b| nu[a].total_cmp(&nu[b]));
-        self.reorder(&order);
+        *self = self.take(&order);
     }
 
-    /// Replaces every column by the rows listed in `indices`, in that order.
-    fn reorder(&mut self, indices: &[usize]) {
-        self.molecule = gather(&self.molecule, indices);
-        self.isotopologue = gather(&self.isotopologue, indices);
-        for column in self.columns.iter_mut().flatten() {
-            *column = gather(column, indices);
+    /// A new list made of the rows listed in `indices`, in that order.
+    fn take(&self, indices: &[usize]) -> LineList {
+        LineList {
+            molecule: gather(&self.molecule, indices),
+            isotopologue: gather(&self.isotopologue, indices),
+            columns: std::array::from_fn(|i| {
+                self.columns[i].as_deref().map(|c| gather(c, indices))
+            }),
         }
     }
 
@@ -330,28 +391,39 @@ impl LineList {
     /// The lines that match every given filter: the molecule number, one of the isotopologue
     /// numbers, and a wavenumber in the inclusive range. `None` places no constraint. The
     /// result is sorted, like the list itself.
+    ///
+    /// Edge cases: `Some(&[])` for the isotopologues selects nothing, and so does a wavenumber
+    /// range with `lo > hi` or a NaN bound.
     pub fn select(
         &self,
         molecule: Option<u16>,
         isotopologues: Option<&[u16]>,
         wavenumber: Option<(f64, f64)>,
     ) -> LineList {
-        let nu = self.nu();
-        let keep: Vec<usize> = (0..self.len())
+        // The list is sorted, so the wavenumber range is a contiguous block of rows.
+        let rows = match wavenumber {
+            None => 0..self.len(),
+            Some((lo, hi)) if lo <= hi => {
+                let nu = self.nu();
+                nu.partition_point(|&x| x < lo)..nu.partition_point(|&x| x <= hi)
+            }
+            // `lo > hi`, or a NaN bound.
+            Some(_) => 0..0,
+        };
+        let keep: Vec<usize> = rows
             .filter(|&i| {
                 molecule.is_none_or(|m| self.molecule[i] == m)
                     && isotopologues.is_none_or(|iso| iso.contains(&self.isotopologue[i]))
-                    && wavenumber.is_none_or(|(lo, hi)| (lo..=hi).contains(&nu[i]))
             })
             .collect();
-        let mut selected = self.clone();
-        selected.reorder(&keep);
-        selected
+        self.take(&keep)
     }
 
     /// A copy of the list with one field replaced. Replacing an optional field makes its
-    /// column present (NaN entries still mean "absent for this line"); replacing the
-    /// wavenumbers re-sorts the lines.
+    /// column present (NaN entries still mean "absent for this line").
+    ///
+    /// **Replacing `Nu` re-sorts the list**, so per-line arrays held in the old order no longer
+    /// line up with it; re-read the columns afterwards.
     ///
     /// # Errors
     ///
@@ -359,8 +431,19 @@ impl LineList {
     /// rules as [`from_columns`](Self::from_columns).
     pub fn with_column(&self, field: LineField, values: Vec<f64>) -> Result<LineList> {
         validate_column(field, &values, self.len())?;
-        let mut list = self.clone();
-        list.columns[field as usize] = Some(values);
+        // Clone the columns that are kept; the new one is moved in.
+        let mut values = Some(values);
+        let mut list = LineList {
+            molecule: self.molecule.clone(),
+            isotopologue: self.isotopologue.clone(),
+            columns: std::array::from_fn(|i| {
+                if i == field as usize {
+                    values.take()
+                } else {
+                    self.columns[i].clone()
+                }
+            }),
+        };
         if field == LineField::Nu {
             list.sort_by_nu();
         }
@@ -468,6 +551,51 @@ mod tests {
             .unwrap();
         assert_eq!(s.value(LineField::NSelf, 1), 0.75);
         assert!(lines.with_column(LineField::NAir, vec![1.0]).is_err());
+    }
+
+    #[test]
+    fn replacing_nu_reorders_every_column() {
+        let mut c = columns(vec![1.0, 2.0]);
+        c.n_self = Some(vec![0.6, 0.7]);
+        c.molecule = vec![1, 2];
+        let lines = LineList::from_columns(c).unwrap();
+        let r = lines.with_column(LineField::Nu, vec![5.0, 4.0]).unwrap();
+        assert_eq!(r.molecule(), &[2, 1]);
+        assert_eq!(r.isotopologue(), &[2, 1]);
+        assert_eq!(r.column(LineField::NSelf).unwrap(), &[0.7, 0.6]);
+        assert_eq!(r.column(LineField::SRef).unwrap(), &[2.0 * 1e-21, 1e-21]);
+    }
+
+    #[test]
+    fn select_edge_cases_select_nothing() {
+        let lines = LineList::from_columns(columns(vec![1.0, 2.0, 3.0])).unwrap();
+        assert!(lines.select(None, Some(&[]), None).is_empty());
+        assert!(lines.select(None, None, Some((3.0, 1.0))).is_empty());
+        assert!(lines.select(None, None, Some((f64::NAN, 3.0))).is_empty());
+        assert!(lines.select(None, None, Some((1.0, f64::NAN))).is_empty());
+        assert_eq!(lines.select(None, None, Some((2.0, 2.0))).len(), 1);
+    }
+
+    #[test]
+    fn equality_treats_nan_as_equal_but_absent_differently() {
+        let mut c = columns(vec![1.0, 2.0]);
+        c.n_self = Some(vec![0.6, f64::NAN]);
+        let lines = LineList::from_columns(c.clone()).unwrap();
+        assert_eq!(lines, lines.clone());
+        assert_eq!(c, c.clone());
+        // A present all-NaN column is not an absent one.
+        let mut all_nan = columns(vec![1.0, 2.0]);
+        all_nan.n_self = Some(vec![f64::NAN; 2]);
+        let absent = columns(vec![1.0, 2.0]);
+        assert_ne!(all_nan, absent);
+        assert_ne!(
+            LineList::from_columns(all_nan).unwrap(),
+            LineList::from_columns(absent).unwrap()
+        );
+        assert_ne!(
+            lines,
+            lines.with_column(LineField::NSelf, vec![0.6, 0.5]).unwrap()
+        );
     }
 
     #[test]
