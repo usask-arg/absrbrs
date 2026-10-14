@@ -275,6 +275,10 @@ Replace `absrbrs/src/error.rs` with the full file:
 //! carries a `source()` chain.
 
 /// Errors returned by absrbrs.
+///
+/// A new variant also needs an arm in `absrbrs-py/src/errors.rs` (`to_pyerr`), a class in
+/// `python/absrbrs/errors.py` if it should not surface as a plain `AbsrbrsError`, and a case in
+/// the `_testing.raise_core_error` hook with a test in `tests/test_errors.py`.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -630,9 +634,9 @@ def test_core_errors_map_to_their_classes(kwargs, cls, message, attributes):
 )
 def test_io_errors_are_oserrors_of_their_kind(kind, cls):
     with pytest.raises(OSError) as info:
-        _testing.raise_core_error("Io", path="CO2.par", kind=kind, message="No such file")
+        _testing.raise_core_error("Io", path="CO2.par", kind=kind, message="failure")
     assert type(info.value) is cls
-    assert str(info.value) == "cannot read CO2.par: No such file"
+    assert str(info.value) == "cannot read CO2.par: failure"
 
 
 def test_unknown_variant_and_kind_are_rejected():
@@ -1211,6 +1215,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Test: `reference/tests/{test_records.py, test_portable_inputs.py, test_faddeeva.py}`
 - Generate: `reference/data/{faddeeva.jsonl, manifest.json}`
 - Modify: `absrbrs/Cargo.toml`, adding the `exclude` line and the dev-dependencies
+- Modify: `.gitattributes`, marking the JSONL data as generated
 - Create: `absrbrs/tests/common/mod.rs`, `absrbrs/tests/reference_data.rs`
 
 **Interfaces:**
@@ -1246,6 +1251,14 @@ echo 3.12 > reference/.python-version
 grep -n "scatrs" -r reference || echo "no scatrs left"
 ```
 Expected: `no scatrs left`. `reference/pyproject.toml` now names the project `absrbrs-reference` and pins `python-flint==0.9.0`.
+
+Mark the large data files as generated, so that regenerations stay out of diffs. Replace `.gitattributes` with:
+
+```text
+reference/data/** text eol=lf
+# One line of faddeeva.jsonl is about 55 KB: keep regenerations out of diffs and reviews.
+reference/data/*.jsonl -diff linguist-generated=true
+```
 
 Create `reference/README.md`:
 
@@ -1307,6 +1320,30 @@ def test_known_values():
     assert close(w.imag, 0.6071577058413937)  # (2/√π) D(1), D Dawson's integral
 
 
+def test_off_axis_value():
+    w, _, _ = faddeeva.w_and_derivative(1.0, 1.0)
+    assert close(w.real, 0.3047442052569126)
+    assert close(w.imag, 0.20821893820283163)
+
+
+def test_far_corners_match_the_asymptotic_series():
+    # Independent of Arb's erfc: w ≈ (i/(√π z)) Σₖ (2k−1)!!/(2z²)ᵏ for large |z|. At
+    # (1e8, 1e-30) Re w is the Lorentz tail, about 1e-38 of |w|, and is checked relative to itself.
+    for x, y in [(1e8, 1e-30), (1e8, 1e6), (0.0, 1e6), (1e8, 0.0)]:
+        w, dw, _ = faddeeva.w_and_derivative(x, y)
+        with ctx.workprec(512):
+            z = acb(x, y)
+            terms = [acb(1)]
+            for k in range(1, 8):
+                terms.append(terms[-1] * (2 * k - 1) / (2 * z * z))
+            series = acb(0, 1) / (arb.pi().sqrt() * z) * sum(terms)
+            dseries = -2 * z * series + 2 * acb(0, 1) / arb.pi().sqrt()
+            if y > 0:
+                assert abs(series.real - w.real) <= abs(w.real) * arb(2) ** -70
+            assert abs(series.imag - w.imag) <= abs(w) * arb(2) ** -70
+            assert abs(dseries - dw) <= abs(dw) * arb(2) ** -70
+
+
 def test_w_is_real_on_the_imaginary_axis():
     w, dw, _ = faddeeva.w_and_derivative(0.0, 2.0)
     assert w.imag == 0 and dw.real == 0
@@ -1331,6 +1368,13 @@ def test_grid():
     assert xs[0] == 0.0 and xs[-1] == 1e8 and 1e-8 in xs and 30.0 in xs
     assert len(ys) == 74
     assert ys[0] == 0.0 and ys[1] == 1e-30 and ys[-1] == 1e6
+
+
+def test_whole_grid_needs_at_most_256_bits():
+    # A precision regression (a point needing far more bits) would show here first.
+    precision, records = faddeeva.generate()
+    assert precision <= 256
+    assert len(records) == 74
 
 
 def test_record_layout():
@@ -1375,11 +1419,15 @@ Create `reference/absrbrs_reference/generators/faddeeva.py`:
 
 One record per y value (case ``y=<repr(y)>``): inputs ``x`` (doubles ≥ 0, increasing) and ``y``
 (a double ≥ 0); outputs ``w_re``, ``w_im``, ``dw_re`` and ``dw_im`` at each x. Negative x follow
-from w(−x + iy) = conj(w(x + iy)) and are not stored.
+from the symmetries w(−x + iy) = conj(w(x + iy)) and w′(−x + iy) = −conj(w′(x + iy)) (so Re w
+and Im w′ are even in x, Im w and Re w′ odd) and are not stored.
 
 w′(z) = −2z w(z) + 2i/√π is formed in Arb, where the cancellation this identity suffers in
 floating point (about |z|² relative) only costs working precision. Each point is recomputed
-at doubling precision until every stored component is known to 2^-80 relative (``TARGET_BITS``).
+at doubling precision until every stored component is known to 2^-80 (``TARGET_BITS``) relative
+to the scales of the spec §6.2 metrics: Re w relative to itself, Im w relative to |w|, and both
+parts of w′ relative to |w′|. Values below the double range (Re w at y = 0, x ≥ 27) are stored
+as subnormals or 0, with an absolute ``err``.
 At x = 0, w(iy) is real, so Im w and Re w′ are exactly zero; they are stored as exact zeros.
 
 The grid (spec §6.2): x ∈ {0, 0.5, …, 30} or {10^(k/4) : |k| ≤ 32}, 1e-8 to 1e8; y ∈ {0} or
@@ -1474,7 +1522,7 @@ ls -l reference/data
 ```
 
 Expected:
-- pytest: `79 passed`;
+- pytest: `82 passed`;
 - the generator prints `faddeeva.jsonl: 74 records`;
 - the SHA-256 is `cb14d4a72be80ea00db2796f28ab6854c2de617fe685d9257507ad59e2196316`. This was measured on macOS arm64 with python-flint 0.9.0 and FLINT 3.6.0. The data are platform-independent, so any other result means the generator or its inputs differ from this plan: stop and investigate;
 - `faddeeva.jsonl` is about 4.1 MB;
@@ -1544,7 +1592,9 @@ fn faddeeva_file_covers_the_spec_grid() {
         }
     }
     let y: Vec<f64> = records.iter().map(|r| r.input_f64("y")).collect();
+    assert!(y.windows(2).all(|p| p[0] < p[1]));
     assert_eq!((y[0], y[1], y[73]), (0.0, 1e-30, 1e6));
+    assert_eq!(find(&records, "y=1.0").input_f64("y"), 1.0);
 }
 
 #[test]
@@ -1613,7 +1663,7 @@ Expected:
 - [ ] **Step 9: Commit**
 
 ```bash
-git add reference absrbrs/Cargo.toml absrbrs/tests Cargo.lock
+git add .gitattributes reference absrbrs/Cargo.toml absrbrs/tests Cargo.lock
 git commit -m "feat: Arb reference generator and Faddeeva reference data with Rust loader
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -1654,7 +1704,7 @@ name = "absrbrs-faddeeva-prototype"
 version = "0.1.0"
 description = "Phase 0 prototype: choosing the Fast-tier Faddeeva algorithm of absrbrs"
 requires-python = ">=3.11"
-# python-flint is pinned exactly, as in reference/: the dense map must match the committed data.
+# python-flint is pinned exactly, as in reference/, so the dense Arb map is reproducible.
 dependencies = ["numpy>=2.0", "scipy>=1.14", "python-flint==0.9.0"]
 
 [dependency-groups]
