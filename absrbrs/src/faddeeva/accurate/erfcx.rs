@@ -23,6 +23,36 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #![allow(clippy::excessive_precision)] // the coefficients are copied verbatim
 
+// erfcx(x) = exp(x^2) erfc(x) function, for real x, written by
+// Steven G. Johnson, October 2012.
+//
+// This function combines a few different ideas.
+//
+// First, for x > 50, it uses a continued-fraction expansion (same as
+// for the Faddeeva function, but with algebraic simplifications for z=i*x).
+//
+// Second, for 0 <= x <= 50, it uses Chebyshev polynomial approximations,
+// but with two twists:
+//
+//    a) It maps x to y = 4 / (4+x) in [0,1].  This simple transformation,
+//       inspired by a similar transformation in the octave-forge/specfun
+//       erfcx by Soren Hauberg, results in much faster Chebyshev convergence
+//       than other simple transformations I have examined.
+//
+//    b) Instead of using a single Chebyshev polynomial for the entire
+//       [0,1] y interval, we break the interval up into 100 equal
+//       subintervals, with a switch/lookup table, and use much lower
+//       degree Chebyshev polynomials in each subinterval. This greatly
+//       improves performance in my tests.
+//
+// For x < 0, we use the relationship erfcx(-x) = 2 exp(x^2) - erfc(x),
+// with the usual checks for overflow etcetera.
+//
+// Performance-wise, it seems to be substantially faster than either
+// the SLATEC DERFC function [or an erfcx function derived therefrom]
+// or Cody's CALERF function (from netlib.org/specfun), while
+// retaining near machine precision in accuracy.
+
 // Given y100=100*y, where y = 4/(4+x) for x >= 0, compute erfc(x).
 //
 // Uses a look-up table of 100 different Chebyshev polynomials
@@ -499,15 +529,21 @@ mod tests {
         assert!(worst <= 1e-14, "{worst:e}");
     }
 
-    /// erfcx(−x) = 2 exp(x²) − erfcx(x).
+    /// Independent values of exp(x²) erfc(x) for x < 0, and overflow below x = −26.7.
     #[test]
-    fn negative_arguments() {
-        for x in [0.25f64, 0.5, 1.0, 3.0, 10.0, 26.0] {
-            let expected = 2.0 * (x * x).exp() - erfcx(x);
-            assert!(
-                ((erfcx(-x) - expected) / expected).abs() <= 1e-14,
-                "x = {x}"
-            );
+    fn negative_arguments_match_independent_values() {
+        // The nearest doubles to exp(x²) erfc(x), from mpmath 1.4.1 with mp.dps = 50.
+        let cases = [
+            (-0.5, 1.952360489182557),
+            (-3.0, 16205.988853999586),
+            (-10.0, 5.376234283632271e43),
+            (-25.0, 5.4335189393274735e271),
+        ];
+        for (x, expected) in cases {
+            let err = ((erfcx(x) - expected) / expected).abs();
+            eprintln!("erfcx({x}): relative error {err:e}");
+            assert!(err <= 1e-13, "x = {x}: {err:e}");
         }
+        assert_eq!(erfcx(-30.0), f64::INFINITY);
     }
 }

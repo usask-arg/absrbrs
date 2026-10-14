@@ -23,6 +23,16 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #![allow(clippy::excessive_precision)] // the coefficients are copied verbatim
 
+// Compute a scaled Dawson integral
+//          FADDEEVA(w_im)(x) = 2*Dawson(x)/sqrt(pi)
+// equivalent to the imaginary part w(x) for real x.
+//
+// Uses methods similar to the erfcx calculation above: continued fractions
+// for large |x|, a lookup table of Chebyshev polynomials for smaller |x|,
+// and finally a Taylor expansion for |x|<0.01.
+//
+// Steven G. Johnson, October 2012.
+
 // Given y100=100*y, where y = 1/(1+x) for x >= 0, compute w_im(x).
 //
 // Uses a look-up table of 100 different Chebyshev polynomials
