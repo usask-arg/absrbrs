@@ -1922,12 +1922,19 @@ COMMITTED = REPO / "reference" / "data" / "faddeeva.jsonl"
 CACHE = PROTOTYPE / ".cache" / "dense.npz"
 HOLDOUT_CACHE = PROTOTYPE / ".cache" / "holdout.npz"
 
-#: Region boundaries that the `search` template chooses between, in |x| (or |z|, which equals
-#: |x| at small y) and in y. A region's errors peak at its edges, so the dense grid samples
-#: each boundary and the double on its other side.
-X_EDGES = (
-    4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 27.0, 30.0, 50.0, 100.0, 300.0, 1000.0, 3000.0,
+#: Candidate edges in |z| of the continued-fraction bands: `search.build` gives each band its
+#: own minimal depth, so the edges where the depth can drop are where the cost is decided.
+BAND_EDGES = (
+    8.0, 9.0, 10.0, 11.0, 12.0, 13.5, 15.0, 17.5, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0,
+    60.0, 75.0, 100.0, 150.0, 200.0, 300.0, 500.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0,
+    2500.0, 3000.0,
 )  # fmt: skip
+#: The exp + CF region ends here: exp(−x²) underflows beyond |x| = 27.
+GAUSS_X_MAX = 27.0
+#: Every boundary that the `search` template chooses between, in |x| (or |z|, which equals |x|
+#: at small y) and in y; they include every threshold of `search.GRID`. A region's errors peak
+#: at its edges, so the dense grid samples each boundary and the double on its other side.
+X_EDGES = (4.0, 5.0, 6.0, GAUSS_X_MAX, *BAND_EDGES)
 Y_EDGES = (1e-3, 1e-2, 0.1, 0.5)
 HOLDOUT_POINTS = 400_000
 HOLDOUT_SEED = 20261014
@@ -2319,7 +2326,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - the decision record that phase 1a implements.
 
 How the search works:
-1. `ErrorTable` computes, once, the value and derivative error of every method variant (`KEYS`: J-pole, Weideman 24/32/40, CF depth 0 to 16, exp + CF depth 0 to 16, Taylor order 1 to 5) at every evaluation point. That is 156 802 points, from the committed grid plus the dense Arb map. The dense map samples every region boundary of the template (`reference.X_EDGES`, `Y_EDGES`) and the double on its other side, because a region's errors peak at its edges.
+1. `ErrorTable` computes, once, the value and derivative error of every method variant (`KEYS`: J-pole, Weideman 24/32/40, CF depth 0 to 16, exp + CF depth 0 to 16, Taylor order 1 to 5) at every evaluation point. That is 164 384 points, from the committed grid plus the dense Arb map. The dense map samples every region boundary of the template (`reference.X_EDGES`, `Y_EDGES`; the candidate continued-fraction band edges are `reference.BAND_EDGES`) and the double on its other side, because a region's errors peak at its edges.
 2. A composite is an ordered list of `Region`s; the first region that matches a point decides its method.
 3. `build` fills one template:
    1. exp + CF for y ≤ y_g and x_g ≤ |x| < 27;
@@ -2336,12 +2343,15 @@ How the search works:
 Create `prototypes/faddeeva/tests/test_search.py`:
 
 ```python
+import json
 import math
+import re
 
 import numpy as np
 import pytest
 
-from faddeeva_prototype import search
+from faddeeva_prototype import reference, search
+from faddeeva_prototype.__main__ import table_markdown
 from faddeeva_prototype.reference import arb_w, complex_points
 from faddeeva_prototype.search import ErrorTable, Region, assign, cost, minimal_parameter
 
@@ -2399,6 +2409,53 @@ def test_holdout_errors_cover_every_region_and_count_nan_as_infinite():
         np.array([2j / math.sqrt(math.pi)]),
     )
     assert nan_case == (math.inf, math.inf)
+
+
+def test_each_band_is_measured_on_its_own_points(monkeypatch):
+    # 9 + 0i belongs to the exp + CF region. The continued fraction alone gives K = 0 there, so
+    # if the [8, 10) band were measured on all its points, rather than on those no earlier
+    # region took, no depth would do.
+    monkeypatch.setattr(search, "BAND_EDGES", (8.0, 10.0))
+    z = complex_points(np.array([9.0, 9.0, 50.0, 1.0]), np.array([0.0, 1.0, 1.0, 1.0]))
+    v = np.array([arb_w(float(q.real), float(q.imag)) for q in z])
+    w, dw = complex_points(v[:, 0], v[:, 1]), complex_points(v[:, 2], v[:, 3])
+    table = ErrorTable(z, w, dw)
+    regions = search.build(table, 0.01, 6.0, 8.0, ("weideman", 24), None)
+    assert regions is not None
+    assert [r.method[0] for r in regions] == ["gauss_cf", "cf", "cf", "weideman"]
+    assert assign(regions, z).tolist() == [0, 1, 2, 3]
+
+
+def test_a_region_without_points_is_rejected():
+    z = np.array([50.0 + 1.0j])
+    table = ErrorTable(z, z, z, keys=(("cf", 0),))
+    assert minimal_parameter(table, "cf", np.array([False]), range(1)) is None
+
+
+def test_the_dense_grid_samples_every_threshold_of_the_template():
+    assert set(search.GRID["x_gauss"]) | {search.GAUSS_X_MAX} | set(search.BAND_EDGES) <= set(
+        reference.X_EDGES
+    )
+    taylor_y = {t[0] for t in search.GRID["taylor"] if t is not None}
+    assert set(search.GRID["y_gauss"]) | taylor_y <= set(reference.Y_EDGES)
+
+
+def test_report_files_are_strict_json_and_well_formed_markdown():
+    z = complex_points(np.array([50.0, 2000.0]), np.array([1e-3, 10.0]))
+    v = np.array([arb_w(float(q.real), float(q.imag)) for q in z])
+    w, dw = complex_points(v[:, 0], v[:, 1]), complex_points(v[:, 2], v[:, 3])
+    table = ErrorTable(z, w, dw, keys=(("cf", 1), ("cf", 0)))
+    regions = [Region("CF |z| in [1000, inf)", ("cf", 0), r_min=1000.0), Region("rest", ("cf", 1))]
+    result = search.measure(regions, table, z)
+    json.dumps(result.to_json(), allow_nan=False)  # raises on an infinite bound
+    assert result.to_json()["regions"][0]["r_max"] is None
+    markdown = table_markdown(
+        {"base": result}, result, {"base": (1.0, 1.0), "**Selected composite**": (1.0, 1.0)}
+    )
+    for block in markdown.split("\n\n"):
+        rows = [line for line in block.splitlines() if line.startswith("|")]
+        cells = {len(re.split(r"(?<!\\)\|", row)) for row in rows}
+        assert len(cells) <= 1, block
 ```
 
 Create `prototypes/faddeeva/tests/test_occupancy.py`:
@@ -2519,6 +2576,7 @@ from numpy.typing import NDArray
 
 from faddeeva_prototype.candidates import evaluate
 from faddeeva_prototype.metrics import derivative_error, value_error
+from faddeeva_prototype.reference import BAND_EDGES, GAUSS_X_MAX
 
 Key = tuple[str, int]
 
@@ -2623,11 +2681,19 @@ def meets(errors: tuple[float, float]) -> bool:
 def minimal_parameter(
     table: ErrorTable, name: str, mask: NDArray[np.bool_], params: range
 ) -> int | None:
-    """The smallest parameter of method ``name`` that meets the targets on ``mask``."""
+    """The smallest parameter of method ``name`` that meets the targets on ``mask``; None if
+    none does, or if ``mask`` is empty (a region without evaluation points is untested)."""
+    if not mask.any():
+        return None
     for p in params:
         if meets(table.worst((name, p), mask)):
             return p
     return None
+
+
+def json_float(v: float) -> float | None:
+    """``v``, or None (JSON null) if it is infinite: JSON has no infinity."""
+    return v if math.isfinite(v) else None
 
 
 @dataclass
@@ -2642,19 +2708,24 @@ class Result:
     occupancy: list[float]
 
     def to_json(self) -> dict:
+        """The composite as strict JSON: unbounded region limits, and errors that are infinite
+        (a NaN somewhere), are written as null."""
         return {
             "regions": [
                 {
-                    **asdict(r),
+                    **{
+                        k: json_float(v) if isinstance(v, float) else v
+                        for k, v in asdict(r).items()
+                    },
                     "method": list(r.method),
-                    "max_value_error": e[0],
-                    "max_derivative_error": e[1],
+                    "max_value_error": json_float(e[0]),
+                    "max_derivative_error": json_float(e[1]),
                     "occupancy": o,
                 }
                 for r, e, o in zip(self.regions, self.region_errors, self.occupancy, strict=True)
             ],
-            "max_value_error": self.max_value_error,
-            "max_derivative_error": self.max_derivative_error,
+            "max_value_error": json_float(self.max_value_error),
+            "max_derivative_error": json_float(self.max_derivative_error),
             "expected_cost": self.expected_cost,
         }
 
@@ -2705,11 +2776,6 @@ BASELINES: dict[str, list[Region]] = {
     "Weideman 32": [Region("all", ("weideman", 32))],
     "Weideman 40": [Region("all", ("weideman", 40))],
 }
-
-#: Band edges in |z| for the continued fraction; each band gets its own minimal depth.
-BAND_EDGES = (8.0, 10.0, 12.0, 15.0, 20.0, 30.0, 50.0, 100.0, 300.0, 1000.0, 3000.0)
-#: The Gaussian term exp(−x²) underflows beyond |x| = 27.
-GAUSS_X_MAX = 27.0
 
 
 def build(
@@ -2835,9 +2901,9 @@ def table_markdown(
             best.regions, best.region_errors, best.occupancy, strict=True
         ):
             method = f"{region.method[0]} {region.method[1]}"
+            name = region.name.replace("|", r"\|")  # names such as "CF |z| in [8, 10)"
             lines.append(
-                f"| {region.name} | {method} | {_fmt(errors[0])} | {_fmt(errors[1])} "
-                f"| {share:.2%} |"
+                f"| {name} | {method} | {_fmt(errors[0])} | {_fmt(errors[1])} | {share:.2%} |"
             )
     return "\n".join(lines) + "\n"
 
@@ -2888,16 +2954,24 @@ def main(argv: list[str] | None = None) -> int:
         },
         "workload_points": int(workload.size),
         "baselines": {
-            name: {**r.to_json(), "holdout": list(holdout[name])} for name, r in baselines.items()
+            name: {**r.to_json(), "holdout": [search.json_float(e) for e in holdout[name]]}
+            for name, r in baselines.items()
         },
         "valid_composites": len(results),
         "rejected_on_holdout": rejected,
         "selected": (
-            {**best.to_json(), "holdout": list(holdout["**Selected composite**"])} if best else None
+            {
+                **best.to_json(),
+                "holdout": [search.json_float(e) for e in holdout["**Selected composite**"]],
+            }
+            if best
+            else None
         ),
     }
     args.json.parent.mkdir(parents=True, exist_ok=True)
-    args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.json.write_text(
+        json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
+    )
     markdown = table_markdown(baselines, best, holdout)
     args.table.write_text(markdown, encoding="utf-8")
     print(markdown, file=sys.stderr)
@@ -2918,13 +2992,13 @@ Run:
 uv run --locked --directory prototypes/faddeeva python -m pytest -q
 uv run --locked ruff check . && uv run --locked ruff format --check .
 ```
-Expected: `26 passed`, and ruff clean.
+Expected: `30 passed`, and ruff clean.
 
 - [ ] **Step 6: Run the report**
 
 Run: `uv run --locked --directory prototypes/faddeeva python -m faddeeva_prototype report`
 
-It first computes the dense Arb map (147 626 points) and the holdout (400 000 points), and caches them in `prototypes/faddeeva/.cache/`, which is git-ignored. Together they take a few seconds with all cores on an M-series Mac; the whole command takes about 10 s. The command exits with status 0 and prints this table, which is also written to `docs/validation/faddeeva-prototype-table.md`:
+It first computes the dense Arb map (155 208 points) and the holdout (400 000 points), and caches them in `prototypes/faddeeva/.cache/`, which is git-ignored. Together they take a few seconds with all cores on an M-series Mac; the whole command takes about 20 s. The command exits with status 0 and prints this table, which is also written to `docs/validation/faddeeva-prototype-table.md`:
 
 ```markdown
 | Algorithm | Max value error | Max derivative error | Holdout value error | Holdout derivative error | Expected cost |
@@ -2933,24 +3007,42 @@ It first computes the dense Arb map (147 626 points) and the holdout (400 000 po
 | hum1wei24 (HAPI) | 2.6e+86 | 1.7e-04 | 2.4e+86 | 1.9e-04 | 66 |
 | Weideman 32 | 1.3e+290 | 9.8e-12 | 5.7e+292 | 9.8e-12 | 568 |
 | Weideman 40 | 2.5e+287 | 1.4e-14 | 1.1e+290 | 1.4e-14 | 696 |
-| **Selected composite** | 4.8e-07 | 1.8e-06 | 4.8e-07 | 1.8e-06 | 61 |
+| **Selected composite** | 4.9e-07 | 1.8e-06 | 4.9e-07 | 1.8e-06 | 55 |
 
 Regions of the selected composite (first match wins):
 
 | Region | Method | Max value error | Max derivative error | Workload share |
 |---|---|---|---|---|
 | exp + CF | gauss_cf 5 | 1.4e-07 | 1.4e-07 | 0.28% |
-| CF |z| in [8, 10) | cf 4 | 5.1e-08 | 5.1e-08 | 0.05% |
-| CF |z| in [10, 12) | cf 3 | 1.5e-07 | 1.5e-07 | 0.05% |
-| CF |z| in [12, 15) | cf 3 | 3.4e-08 | 3.4e-08 | 0.11% |
-| CF |z| in [15, 20) | cf 2 | 4.8e-07 | 4.8e-07 | 0.15% |
-| CF |z| in [20, 30) | cf 2 | 8.3e-08 | 8.3e-08 | 0.33% |
-| CF |z| in [30, 50) | cf 2 | 7.3e-09 | 7.3e-09 | 0.85% |
-| CF |z| in [50, 100) | cf 1 | 4.0e-07 | 4.0e-07 | 2.11% |
-| CF |z| in [100, 300) | cf 1 | 2.5e-08 | 2.5e-08 | 8.43% |
-| CF |z| in [300, 1000) | cf 1 | 3.1e-10 | 3.1e-10 | 29.46% |
-| CF |z| in [1000, 3000) | cf 1 | 2.5e-12 | 2.5e-12 | 44.64% |
-| CF |z| in [3000, inf) | cf 0 | 1.7e-07 | 1.7e-07 | 13.27% |
+| CF \|z\| in [8, 9) | cf 4 | 5.1e-08 | 5.1e-08 | 0.03% |
+| CF \|z\| in [9, 10) | cf 3 | 3.6e-07 | 3.6e-07 | 0.02% |
+| CF \|z\| in [10, 11) | cf 3 | 1.5e-07 | 1.5e-07 | 0.03% |
+| CF \|z\| in [11, 12) | cf 3 | 6.9e-08 | 6.9e-08 | 0.02% |
+| CF \|z\| in [12, 13.5) | cf 3 | 3.4e-08 | 3.4e-08 | 0.06% |
+| CF \|z\| in [13.5, 15) | cf 3 | 1.3e-08 | 1.3e-08 | 0.05% |
+| CF \|z\| in [15, 17.5) | cf 2 | 4.8e-07 | 4.8e-07 | 0.08% |
+| CF \|z\| in [17.5, 20) | cf 2 | 1.9e-07 | 1.9e-07 | 0.07% |
+| CF \|z\| in [20, 25) | cf 2 | 8.3e-08 | 8.3e-08 | 0.15% |
+| CF \|z\| in [25, 30) | cf 2 | 2.2e-08 | 2.2e-08 | 0.18% |
+| CF \|z\| in [30, 35) | cf 2 | 7.3e-09 | 7.3e-09 | 0.21% |
+| CF \|z\| in [35, 40) | cf 2 | 2.9e-09 | 2.9e-09 | 0.22% |
+| CF \|z\| in [40, 45) | cf 2 | 1.3e-09 | 1.3e-09 | 0.21% |
+| CF \|z\| in [45, 50) | cf 2 | 6.3e-10 | 6.3e-10 | 0.21% |
+| CF \|z\| in [50, 60) | cf 1 | 4.0e-07 | 4.0e-07 | 0.42% |
+| CF \|z\| in [60, 75) | cf 1 | 1.9e-07 | 1.9e-07 | 0.63% |
+| CF \|z\| in [75, 100) | cf 1 | 7.9e-08 | 7.9e-08 | 1.05% |
+| CF \|z\| in [100, 150) | cf 1 | 2.5e-08 | 2.5e-08 | 2.11% |
+| CF \|z\| in [150, 200) | cf 1 | 4.9e-09 | 4.9e-09 | 2.11% |
+| CF \|z\| in [200, 300) | cf 1 | 1.6e-09 | 1.6e-09 | 4.21% |
+| CF \|z\| in [300, 500) | cf 1 | 3.1e-10 | 3.1e-10 | 8.42% |
+| CF \|z\| in [500, 1000) | cf 1 | 4.0e-11 | 4.0e-11 | 21.05% |
+| CF \|z\| in [1000, 1250) | cf 1 | 2.5e-12 | 2.5e-12 | 10.53% |
+| CF \|z\| in [1250, 1500) | cf 1 | 1.0e-12 | 1.0e-12 | 10.52% |
+| CF \|z\| in [1500, 1750) | cf 1 | 4.9e-13 | 4.9e-13 | 8.06% |
+| CF \|z\| in [1750, 2000) | cf 0 | 4.9e-07 | 4.9e-07 | 3.29% |
+| CF \|z\| in [2000, 2500) | cf 0 | 3.8e-07 | 3.8e-07 | 6.12% |
+| CF \|z\| in [2500, 3000) | cf 0 | 2.4e-07 | 2.4e-07 | 6.12% |
+| CF \|z\| in [3000, inf) | cf 0 | 1.7e-07 | 1.7e-07 | 13.27% |
 | Taylor | taylor 3 | 8.7e-08 | 1.8e-06 | 0.08% |
 | weideman 24 | weideman 24 | 2.4e-07 | 9.6e-09 | 0.19% |
 ```
@@ -2965,7 +3057,7 @@ The JSON report goes to `docs/validation/data/faddeeva_prototype.json`, with `"v
 
 Create `docs/plans/phase-0-followups.md` with the content below. If the report differed in some digit and you investigated and accepted it, use the numbers from your report instead:
 
-````markdown
+```markdown
 # Phase 0 follow-ups and decisions
 
 Decisions taken in phase 0, and items deferred to later phases. This file is the most
@@ -2976,25 +3068,37 @@ match.
 
 The prototype (`prototypes/faddeeva/`, report in
 `docs/validation/data/faddeeva_prototype.json`) selected this composite. Each point uses the
-first region that contains it; |x| is used throughout, with w(−x + iy) = conj(w(x + iy)).
+first region that contains it; |x| is used throughout, with w(−x + iy) = conj(w(x + iy)) and
+w′(−x + iy) = −conj(w′(x + iy)).
 
 | Region | Method |
 |---|---|
 | y ≤ 0.01 and 6 ≤ \|x\| < 27 | exp(−z²) + continued fraction, depth 5 |
-| 8 ≤ \|z\| < 10 | continued fraction, depth 4 |
-| 10 ≤ \|z\| < 15 | continued fraction, depth 3 |
+| 8 ≤ \|z\| < 9 | continued fraction, depth 4 |
+| 9 ≤ \|z\| < 15 | continued fraction, depth 3 |
 | 15 ≤ \|z\| < 50 | continued fraction, depth 2 |
-| 50 ≤ \|z\| < 3000 | continued fraction, depth 1 (Humlíček region I) |
-| \|z\| ≥ 3000 | continued fraction, depth 0 (Lorentzian) |
+| 50 ≤ \|z\| < 1750 | continued fraction, depth 1 (Humlíček region I) |
+| \|z\| ≥ 1750 | continued fraction, depth 0 (Lorentzian) |
 | y ≤ 0.01 and \|x\| < 6 | Taylor series in iy, order 3 (needs Dawson's integral) |
 | otherwise | Weideman, 24 terms |
 
-Measured over 156 802 Arb grid points, including every region boundary, and confirmed on
-400 000 random Arb points: maximum value error 4.8e-7 and maximum derivative error 1.8e-6,
-against targets of 1e-6 and 1e-5. The derivative maximum is in the Taylor region, where the
-derivative is that of the formula: its y-part is a series one order shorter than the value's. The expected cost proxy is 61 flop-equivalents
-per point, against 240 for sasktran2's J-pole and 66 for HAPI's hum1wei24. About 98% of the
-points of atmospheric line windows fall in the depth-0 and depth-1 continued-fraction regions.
+The normative definitions of the methods are the prototype's functions in
+`prototypes/faddeeva/faddeeva_prototype/candidates.py`: `gauss_cf`, `laplace_cf` (depth n:
+coefficients k/2 for k = n, …, 1), `small_y_taylor` (including its derivative, which is that
+of the truncated series in both x and y) and `weideman` (L = √(N/√2), coefficients by FFT).
+
+Measured over 164 384 Arb grid points, which sample every region boundary along and near the
+real axis where the errors peak, and confirmed on 400 000 random Arb points: maximum value
+error 4.9e-7 and maximum derivative error 1.8e-6, against targets of 1e-6 and 1e-5. (The Task 5
+review also checked full arcs at every |z| edge, y down to 1e-320, and fine x steps near the
+axis.) The derivative maximum is in the Taylor region, where the derivative is that of the
+formula: its y-part is a series one order shorter than the value's.
+
+The expected cost proxy is 55 flop-equivalents per point, against 240 for sasktran2's J-pole
+and 66 for HAPI's hum1wei24. About 98% of the points of atmospheric line windows fall in the
+depth-0 and depth-1 continued-fraction regions, so the depth-0/depth-1 edge (1750) is the main
+cost lever; the other choices are near-ties on the proxy (the cheapest valid composites differ
+by under 1%).
 
 Baselines, for the record: the J-pole (sasktran2) and hum1wei24 (HAPI) do not meet the value
 target. Their relative errors explode where K is tiny, far in the wings at low pressure. This
@@ -3004,20 +3108,54 @@ confirms spec Appendix A, item 2.
 
 - Implement the composite above in Rust, returning K, K_x and K_y. In the continued-fraction
   regions (98% of points), evaluate the real and imaginary parts in real arithmetic, without
-  complex division. Measure the real cost against the proxy.
-- The value margins are tightest in the 15 ≤ |z| < 20 band (4.8e-7 against the 5e-7
-  half-target) and the 50 ≤ |z| < 100 band (4.0e-7, at |z| = 50 and small y). The Rust accuracy
-  map must sample both densely, at their edges especially. If rounding takes either over 1e-6,
-  add one level of depth there.
-- The Taylor region needs Dawson's integral D(x) for |x| < 6. Take it from the
-  Accurate-tier port of the Faddeeva Package (its `w_im`), or use a dedicated rational
-  approximation. Decide when the Accurate tier is ported.
+  complex division. Measure the real cost against the proxy: the proxy prices a complex
+  division at 12 and a continued-fraction level at 40 flop-equivalents, so it ranks the
+  composites but does not predict the speed-up.
+- For a line with fixed y the regions become ranges of |x|: |z| ≥ r is |x| ≥ √(r² − y²), and
+  the y ≤ 0.01 regions disappear when y > 0.01 (spec §6.4). Test the Rust accuracy map with
+  the Rust classification itself: sqrt and hypot can round differently at an edge.
+- The value margins are tightest at the depth-0 edge (4.9e-7 at |z| = 1750; the Lorentzian's
+  relative error is about 1.5/|z|²), in the 15 ≤ |z| < 17.5 band (4.8e-7) and in the
+  50 ≤ |z| < 60 band (4.0e-7), all against the 5e-7 half-target. Sample them densely at their
+  edges. If rounding takes the depth-0 edge over 5e-7, move it to 1800; elsewhere add one level
+  of depth.
+- Taylor order 4 is a near-tie (about +0.02 on the proxy) and lowers the maximum derivative
+  error from 1.8e-6 to about 5e-7; prefer it if the Rust cost confirms the tie.
+- Dawson's integral D(x), for |x| < 6, is needed by every valid composite (no template point
+  without the Taylor region passes). Its accuracy matters: the Taylor value term
+  y (2/√π)(2x D(x) − 1) cancels as |x| → 6 and amplifies an error in D about 70 times. Measured
+  in the prototype, D to 1e-8 relative gives 7e-7 (over the half-target), and D to 1e-9 gives
+  8e-8. Use D to about 1e-9 relative or better: from the Accurate-tier port of the Faddeeva
+  Package (its `w_im`), or compute 2x D(x) − 1 directly, without the cancellation.
 - `scipy.special.wofz` is Johnson's Faddeeva Package. It is a convenient independent check
   of the Accurate-tier Rust port, in addition to the Arb data.
-- The dense map's inputs come from the platform's `10.0 **` and are not portable. That does
-  not matter for an uncommitted map, but any committed accuracy map must use portable inputs,
-  as `reference/` does.
-````
+- The dense map's and the holdout's inputs come from the platform's `10.0 **` and numpy's
+  generator, and are not bit-portable. That does not matter for uncommitted maps, but any
+  committed accuracy map must use portable inputs, as `reference/` does.
+
+## Review notes for later phases
+
+Recorded from the phase 0 task reviews.
+
+- **I/O errors (phase 1b).** `Error::Io` keeps `kind` and a message, so Python gets
+  `FileNotFoundError`/`PermissionError`/`OSError`, but `.errno` and `.filename` are `None`.
+  When the file readers land, decide whether to also keep `raw_os_error: Option<i32>` and build
+  `OSError(errno, strerror, path)` (standard text, CPython picks the subclass), or document that
+  the attributes are unset.
+- **uv cache-keys (phase 1b).** Data embedded in the core crate (`include_bytes!` of the TIPS
+  tables) must be added to `[tool.uv] cache-keys`, or `uv run pytest` tests a stale extension;
+  `rust-toolchain.toml` is missing from the keys as well.
+- **Build profiles.** `lto = "fat"` and `codegen-units = 1` apply only to builds of this
+  workspace; when sasktran2 depends on absrbrs, sasktran2's profiles apply. State this next to
+  the spec §10 performance targets, and benchmark under both.
+- **Free-threaded Python.** abi3 wheels exclude free-threaded builds (3.13t/3.14t); say so in
+  the spec §9.3 packaging section.
+- **Crate docs.** The crate-level doc in `absrbrs/src/lib.rs` points at a repository-relative
+  spec path, which docs.rs cannot link; use the GitHub URL once the remote exists, and check the
+  README links before the first crates.io publish.
+- **Error variants.** Struct-variant fields are a semver commitment (enum-level
+  `#[non_exhaustive]` does not cover them); acceptable at 0.0.x, revisit before 0.1.0.
+```
 
 Check the thresholds against `"selected"` → `"regions"` in the JSON: the `exp + CF` region has `y_max` 0.01 and `x_min` 6.0, and the `Taylor` region has `y_max` 0.01 and `x_max` 6.0.
 
@@ -3410,7 +3548,7 @@ candidate approximations, each returning w and the derivative of its own formula
 - a Taylor series in y about the real axis, using Dawson's integral;
 - sasktran2's 8-pole approximation, and HAPI's hum1wei24, as baselines.
 
-It measures them against Arb at about 157 000 points: the committed reference grid
+It measures them against Arb at about 164 000 points: the committed reference grid
 (`reference/data/faddeeva.jsonl`) and a denser map computed with Arb, which samples every region
 boundary the search can choose. A search over region-switched composites then picks the
 cheapest one that meets half of each target, leaving room for the Rust implementation's
