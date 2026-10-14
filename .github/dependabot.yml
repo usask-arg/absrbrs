@@ -36,6 +36,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # Never bumped automatically: a new python-flint needs a deliberate regeneration.
+    ignore:
+      - dependency-name: python-flint
     groups:
       reference:
         patterns: ["*"]
@@ -46,6 +49,11 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # A frozen phase 0 study: security updates only (no version-update pull requests), and
+    # python-flint is never bumped automatically.
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: python-flint
     groups:
       prototype:
         patterns: ["*"]

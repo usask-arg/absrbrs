@@ -1,9 +1,10 @@
-# Adapted from pratmo-rust's release workflow, itself generated from maturin's GitHub Actions
-# template: wheels and the sdist are built on every push to main, on pull requests that touch
-# the packaging, and on tags; the wheels are then installed and tested. A tag vX.Y.Z publishes
-# them to PyPI, then the absrbrs crate to crates.io (Trusted Publishing for both, from the
-# environments `pypi` and `crates-io`), once the preflight checks pass. The extension is
-# abi3-py311, so one wheel per platform, built with Python 3.11, serves every later Python.
+# Adapted from scatrs's release workflow, itself adapted from pratmo-rust's, which was
+# generated from maturin's GitHub Actions template: wheels and the sdist are built on every
+# push to main, on pull requests that touch the packaging, and on tags; the wheels are then
+# installed and tested. A tag vX.Y.Z publishes them to PyPI, then the absrbrs crate to
+# crates.io (Trusted Publishing for both, from the environments `pypi` and `crates-io`), once
+# the preflight checks pass. The extension is abi3-py311, so one wheel per platform, built
+# with Python 3.11, serves every later Python.
 #
 # Actions are pinned to commit SHAs (Dependabot updates them); no caches, so that nothing a
 # pull request wrote can reach a release build.

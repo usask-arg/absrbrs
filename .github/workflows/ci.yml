@@ -47,8 +47,8 @@ jobs:
         run: cargo doc -p absrbrs --no-deps --document-private-items --locked
       - name: Check the big-endian wheel target (32-bit platforms are not supported)
         run: cargo check --workspace --locked --target s390x-unknown-linux-gnu
-      # As `cargo publish` does at release time: package the crate, then build it from the
-      # packaged files alone (the reference-backed tests are not published).
+      # As `cargo publish` does at release time: package the crate; the next step builds and
+      # tests it from the packaged files alone.
       - name: Package the absrbrs crate
         run: cargo package -p absrbrs --locked
       # As `cargo test` on the crates.io sources would: the reference-backed integration tests
@@ -104,7 +104,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # The MSRV is that of the library crates; dev-dependencies (proptest, ...) may need newer.
+      # The MSRV is that of the library crates; dev-dependencies (serde, serde_json) may need newer.
       - name: Check the libraries
         run: cargo +1.85.0 check --workspace --lib --locked
 
@@ -209,6 +209,7 @@ jobs:
             exit 1
           fi
       - name: Run the Faddeeva prototype's tests
+        if: ${{ !cancelled() }} # also after a drift failure above
         run: uv run --locked --directory prototypes/faddeeva python -m pytest -q
 
   # The one status check to require in branch protection: it fails unless every job above

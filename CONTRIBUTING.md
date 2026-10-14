@@ -23,6 +23,8 @@ parents.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo build --workspace --lib
+RUSTDOCFLAGS="-D warnings" cargo doc -p absrbrs --no-deps --document-private-items
+cargo check --workspace --target s390x-unknown-linux-gnu   # rustup target add s390x-unknown-linux-gnu
 cargo test --workspace
 cargo +1.85.0 check --workspace --lib   # the MSRV: rustup toolchain install 1.85.0
 cargo package -p absrbrs                # add --allow-dirty while changes are uncommitted
@@ -36,6 +38,12 @@ uv run --directory prototypes/faddeeva python -m pytest
 uv run --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
 uvx --from actionlint-py==1.7.12.25 actionlint   # after changing .github/workflows
 ```
+
+CI also tests the packaged crate on its own, as `cargo test` on the crates.io sources would:
+extract `target/package/absrbrs-*.crate` outside the repository and run `cargo test --locked`
+there (the reference-backed integration tests are not published). The pre-commit hooks
+(whitespace, end-of-file, YAML and TOML checks, Markdown formatting) run locally only, not in
+CI.
 
 The documentation build downloads the Python and numpy inventories; see
 `docs/installation.md` for building it offline.
@@ -60,7 +68,7 @@ only to releases at least a week old.
     require.
 - `.github/workflows/release.yml`, on pushes to `main`, tags `v*`, and pull requests that touch
   the packaging: wheels for every platform and the sdist, installed and tested on every
-  platform with a GitHub runner. A tag also runs the preflight checks and publishes.
+  platform with a GitHub runner. A tag also checks the tag against the Cargo version and publishes.
 - `.github/workflows/docs.yml`: publishes the documentation from `main` to GitHub Pages.
 - `.github/workflows/scheduled.yml`, every Monday: the Rust tests on Intel macOS, and a
   regeneration of every reference file on Linux and macOS that fails on any difference from
@@ -91,7 +99,15 @@ which writes `docs/validation/data/faddeeva_prototype.json` and
    PyPI and crates.io with Trusted Publishing (environments `pypi` and `crates-io`, each with
    required reviewers).
 
-One-time repository setup: GitHub Pages with source "GitHub Actions"; a tag ruleset that
-restricts `v*` tags to maintainers; Trusted Publishers on PyPI and crates.io for this
-repository's `release.yml`; the first crates.io release published by hand, because Trusted
-Publishing needs an existing crate.
+One-time repository setup:
+
+- GitHub Pages with source "GitHub Actions", before the first push to `main` (`docs.yml`
+  deploys there).
+- A tag ruleset that restricts `v*` tags to maintainers.
+- Create the GitHub environments `pypi` and `crates-io`, each with required reviewers and a
+  deployment rule allowing only `v*` tags, before the first tag: a workflow that references a
+  missing environment creates it without protection.
+- Trusted Publishers on PyPI and crates.io for this repository's `release.yml`.
+- First-release order: Trusted Publishing needs an existing crate, so publish the first crate
+  version to crates.io by hand and configure its Trusted Publisher before pushing the first
+  tag. Otherwise the tag publishes to PyPI and then the crates.io job fails.
