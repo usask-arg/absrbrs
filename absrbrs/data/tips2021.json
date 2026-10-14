@@ -458,15 +458,15 @@
     },
     "31_2.QTpy": {
       "md5": "f0013fa979a547f59ed1040f31bd24df",
-      "points": 4999,
+      "points": 4971,
       "sha256": "8103e93a07ca3d0ac988cca390424427e0944ac571fe9cc59f9b69709a2012da",
-      "t_first": 2.0
+      "t_first": 30.0
     },
     "31_3.QTpy": {
       "md5": "192c8ecd843463cd1401307c62a81c4f",
-      "points": 4999,
+      "points": 4971,
       "sha256": "0a4318adb8903127410f3e655d5b0a78f1c60f406e2dcb706e5c87c0b07e3921",
-      "t_first": 2.0
+      "t_first": 30.0
     },
     "32_1.QTpy": {
       "md5": "8188b85636cc85687ba3d68484266f3a",
@@ -1087,9 +1087,17 @@
       "t_first": 1.0
     }
   },
+  "fortran_check": {
+    "bound": "half a unit in the 5th significant figure of the Fortran value plus the f32 rounding of the stored value",
+    "file": "TIPS_2021.zip (BD_TIPS_2021.FOR)",
+    "md5": "b8e5baaf59d17d6713b74deb6fba7ae5",
+    "nodes_compared": 440011,
+    "sha256": "3bfdbf99c4b59edec194fb66493ee0f041ee53d450c10f4072aeed8b2998c466",
+    "worst_ratio_to_bound": 0.9988
+  },
   "isotopologues": 181,
   "licence": "MIT, Copyright (C) 2021 Robert Gamache (see absrbrs/LICENSES/TIPS-2021-MIT.txt)",
-  "points": 876497,
-  "sha256": "5ee35c36def2248830dcdf3ae2aea39702a4a0b4e04c47c86d42d17af2e87aa5",
+  "points": 876441,
+  "sha256": "6c88a976567ba5bae47d65d64d785bcb27471b276b7782b74dacf946df58c439",
   "source": "https://doi.org/10.5281/zenodo.4708099"
 }

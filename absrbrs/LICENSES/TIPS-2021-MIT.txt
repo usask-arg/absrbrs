@@ -1,4 +1,4 @@
-TIPS-2021 total internal partition sums (absrbrs/data/tips2021.bin is converted from the Zenodo record 10.5281/zenodo.4708099)
+TIPS-2021 total internal partition sums (data/tips2021.bin in the absrbrs crate, absrbrs/data/tips2021.bin in the repository, is converted from the Zenodo record 10.5281/zenodo.4708099)
 
 MIT LICENSE
 

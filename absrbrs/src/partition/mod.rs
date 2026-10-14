@@ -8,7 +8,6 @@ pub use tabulated::TabulatedPartition;
 pub use tips2021::{Tips2021, tips2021};
 
 use crate::{Error, Result};
-use hermite::Table;
 
 /// Q(T) and its logarithmic derivative d ln Q/dT (K⁻¹), consistent with each other.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,27 +30,22 @@ pub trait PartitionFunction: Send + Sync {
     ) -> Result<PartitionValue>;
 }
 
-/// Evaluates `table` at `temperature`, or returns `OutsideTable` if the temperature is outside
-/// [first node, last node] or is NaN.
-fn evaluate_table(
-    table: &Table,
+/// Returns `OutsideTable` unless `temperature` lies in `[t_first, t_last]` (so NaN is outside).
+fn check_range(
+    (t_first, t_last): (f64, f64),
     molecule: u16,
     isotopologue: u16,
     temperature: f64,
-) -> Result<PartitionValue> {
-    let (t_first, t_last) = table.range();
-    if !(t_first <= temperature && temperature <= t_last) {
-        return Err(Error::OutsideTable {
+) -> Result<()> {
+    if t_first <= temperature && temperature <= t_last {
+        Ok(())
+    } else {
+        Err(Error::OutsideTable {
             molecule,
             isotopologue,
             temperature,
-        });
+        })
     }
-    let (ln_q, dlnq_dt) = table.evaluate(temperature);
-    Ok(PartitionValue {
-        q: ln_q.exp(),
-        dlnq_dt,
-    })
 }
 
 #[cfg(test)]
@@ -124,9 +118,11 @@ mod tests {
                 isotopologue: 3
             })
         ));
-        // Every table decodes to finite, positive Q (the converter drops the non-positive values
-        // at 1 K of 31_2, 31_3 and 57_1, so those start at 2 K).
-        assert_eq!(tips2021().temperature_range(31, 2), Some((2.0, 5000.0)));
+        // Every table decodes to finite, positive Q. The converter starts the H2S tables 31_2 and
+        // 31_3 at 30 K (unphysical below) and 57_1 at 2 K (Q(1 K) = 0).
+        assert_eq!(tips2021().temperature_range(31, 2), Some((30.0, 5000.0)));
+        assert_eq!(tips2021().temperature_range(31, 3), Some((30.0, 5000.0)));
+        assert_eq!(tips2021().temperature_range(57, 1), Some((2.0, 5000.0)));
         for (mol, iso) in isos {
             let (t_first, t_last) = tips2021().temperature_range(mol, iso).unwrap();
             for t in [t_first, t_first + 0.5, 296.0f64.min(t_last), t_last] {
@@ -142,16 +138,32 @@ mod tests {
     #[test]
     fn tabulated_tables() {
         let mut p = TabulatedPartition::new();
-        // Q = T^1.5 exactly at the nodes; nonuniform grid.
+        // Q = T^1.5 on a nonuniform grid: ln Q is linear in ln T, which the interpolant
+        // reproduces to rounding, at the nodes and between them.
         let t: Vec<f64> = vec![100.0, 150.0, 220.0, 300.0, 400.0];
         let q: Vec<f64> = t.iter().map(|t: &f64| t.powf(1.5)).collect();
         p.insert(2, 1, &t, &q).unwrap();
-        let v = p.evaluate(2, 1, 220.0).unwrap();
-        assert!((v.q - 220f64.powf(1.5)).abs() <= 1e-12 * v.q);
-        let v = p.evaluate(2, 1, 250.0).unwrap();
-        // 2.4e-3 here: the node slopes are only second order, and the nodes are 50-100 K apart.
-        assert!((v.q / 250f64.powf(1.5) - 1.0).abs() < 3e-3);
-        assert!((v.dlnq_dt - 1.5 / 250.0).abs() < 1e-4);
+        // A two-point table (secant slopes) is exact for a power law too.
+        p.insert(2, 4, &[100.0, 400.0], &[1000.0, 8000.0]).unwrap();
+        for (iso, temperature) in [
+            (1, 100.0),
+            (1, 123.4),
+            (1, 220.0),
+            (1, 250.0),
+            (1, 399.9),
+            (1, 400.0),
+            (4, 250.0),
+        ] {
+            let v = p.evaluate(2, iso, temperature).unwrap();
+            assert!(
+                (v.q / f64::powf(temperature, 1.5) - 1.0).abs() <= 1e-12,
+                "{iso} at {temperature}: {v:?}"
+            );
+            assert!(
+                (v.dlnq_dt * temperature / 1.5 - 1.0).abs() <= 1e-12,
+                "{iso} at {temperature}: {v:?}"
+            );
+        }
         assert!(matches!(
             p.evaluate(2, 2, 250.0),
             Err(Error::MissingPartitionFunction { .. })
@@ -160,9 +172,16 @@ mod tests {
             p.evaluate(2, 1, 401.0),
             Err(Error::OutsideTable { .. })
         ));
+        assert!(matches!(
+            p.evaluate(2, 1, 99.0),
+            Err(Error::OutsideTable { .. })
+        ));
         assert!(p.insert(2, 3, &[1.0, 1.0], &[1.0, 2.0]).is_err()); // not increasing
         assert!(p.insert(2, 3, &[1.0, 2.0], &[1.0, -2.0]).is_err()); // Q must be > 0
         assert!(p.insert(2, 3, &[1.0], &[1.0]).is_err()); // at least two points
         assert!(p.insert(2, 3, &[1.0, 2.0], &[1.0]).is_err()); // lengths
+        assert!(p.insert(2, 3, &[0.0, 2.0], &[1.0, 2.0]).is_err()); // T must be > 0
+        let close = f64::from_bits(1e300f64.to_bits() + 1);
+        assert!(p.insert(2, 3, &[1e300, close], &[1.0, 2.0]).is_err()); // ln T not increasing
     }
 }

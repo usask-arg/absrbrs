@@ -3,16 +3,25 @@
 use std::collections::BTreeMap;
 
 use super::hermite::Table;
-use super::{PartitionFunction, PartitionValue, evaluate_table};
+use super::{PartitionFunction, PartitionValue, check_range};
 use crate::{Error, Result};
 
-/// Partition functions from user-supplied tables of Q(T), interpolated like [`Tips2021`]
-/// (cubic Hermite in ln Q). The temperature grid need not be uniform.
+/// Partition functions from user-supplied tables of Q(T), by cubic Hermite interpolation of
+/// ln Q against ln T (exact for Q ∝ Tⁿ, which suits coarse tables); d ln Q/dT is
+/// (d ln Q/d ln T)/T. The temperature grid need not be uniform. ([`Tips2021`], with its 1 K
+/// grid, interpolates in T instead.)
 ///
 /// [`Tips2021`]: super::Tips2021
 #[derive(Clone, Debug, Default)]
 pub struct TabulatedPartition {
-    tables: BTreeMap<(u16, u16), Table>,
+    tables: BTreeMap<(u16, u16), UserTable>,
+}
+
+/// A table in ln T, with its temperature range kept exactly as given.
+#[derive(Clone, Debug)]
+struct UserTable {
+    range: (f64, f64),
+    table: Table,
 }
 
 impl TabulatedPartition {
@@ -58,11 +67,19 @@ impl TabulatedPartition {
         if !q.iter().all(|q| q.is_finite() && *q > 0.0) {
             return invalid("Q must be finite and positive");
         }
+        let ln_t: Vec<f64> = temperature.iter().map(|t| t.ln()).collect();
+        if !ln_t.windows(2).all(|w| w[0] < w[1]) {
+            return invalid(
+                "temperatures are too close together (ln T must be strictly increasing)",
+            );
+        }
         let ln_q = q.iter().map(|q| q.ln()).collect();
-        self.tables.insert(
-            (molecule, isotopologue),
-            Table::new(temperature.to_vec(), ln_q),
-        );
+        let range = (temperature[0], temperature[temperature.len() - 1]);
+        let table = UserTable {
+            range,
+            table: Table::new(ln_t, ln_q),
+        };
+        self.tables.insert((molecule, isotopologue), table);
         Ok(())
     }
 }
@@ -81,6 +98,11 @@ impl PartitionFunction for TabulatedPartition {
                     molecule,
                     isotopologue,
                 })?;
-        evaluate_table(table, molecule, isotopologue, temperature)
+        check_range(table.range, molecule, isotopologue, temperature)?;
+        let (ln_q, dlnq_dlnt) = table.table.evaluate(temperature.ln());
+        Ok(PartitionValue {
+            q: ln_q.exp(),
+            dlnq_dt: dlnq_dlnt / temperature,
+        })
     }
 }

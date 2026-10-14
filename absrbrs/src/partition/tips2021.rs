@@ -10,7 +10,7 @@ use std::fmt;
 use std::sync::OnceLock;
 
 use super::hermite::Table;
-use super::{PartitionFunction, PartitionValue, evaluate_table};
+use super::{PartitionFunction, PartitionValue, check_range};
 use crate::{Error, Result};
 
 static BLOB: &[u8] = include_bytes!("../../data/tips2021.bin");
@@ -48,13 +48,28 @@ impl Entry {
     }
 }
 
-/// Total internal partition sums from TIPS-2021 (Gamache et al. 2021; MIT licence, Copyright (C)
-/// 2021 Robert Gamache), for 181 HITRAN isotopologues at 1 K steps from 1 K to each table's
-/// maximum (1000–9000 K), stored as f32 (≤ 6e-8 relative).
+/// Total internal partition sums from TIPS-2021 (Gamache et al. 2021, doi:10.1016/j.jqsrt.2021.107713;
+/// MIT licence, Copyright (C) 2021 Robert Gamache), for 181 HITRAN isotopologues at 1 K steps
+/// from 1 K to each table's maximum (1000–9000 K). Q and d ln Q/dT come from cubic Hermite
+/// interpolation of ln Q in T, so they are consistent with each other.
 ///
-/// Three tables (molecule 31, isotopologues 2 and 3, and molecule 57, isotopologue 1) start at
-/// 2 K, because their source value of Q at 1 K is not positive. Q and d ln Q/dT come from cubic
-/// Hermite interpolation in ln Q, so they are consistent with each other.
+/// Three tables start above 1 K. The H2S tables (molecule 31, isotopologues 2 and 3) start at
+/// 30 K: below that their ratios to isotopologue 1 depart from the ratio of the degeneracies, by
+/// up to a factor of 2. CH3 (57, 1) starts at 2 K, because its Q at 1 K is 0, and its
+/// low-temperature values carry few digits (Q(2 K) = 0.000416, about 1e-3 relative rounding).
+/// `TIPS_2021.py` gives 3010 K as the maximum for CF4 (42, 1), but its table runs, smoothly, to
+/// 5000 K, and all of it is used.
+///
+/// Accuracy:
+/// - Q is stored as f32, which rounds by at most 6e-8 relative, comparable to the 6–9
+///   significant figures of the source.
+/// - Between the nodes, from 50 K up, the interpolant matches higher-order interpolation to about
+///   1e-8 in ln Q; d ln Q/dT carries about 1e-5 relative noise from the data.
+/// - Below about 20 K, where ln Q curves sharply, errors between the nodes are 1e-2 to 2e-1.
+/// - Kinks in the source tables (SO3 (47, 1) at 650 K, HCN (23, 1) and (23, 2) at 1000 K)
+///   distort d ln Q/dT within ±1 K of them.
+/// - At non-integer temperatures the values differ from those of TIPS's own (and HAPI's)
+///   interpolation, which is linear in Q, by up to about 4e-6 relative.
 pub struct Tips2021 {
     index: BTreeMap<(u16, u16), Entry>,
 }
@@ -139,13 +154,16 @@ impl PartitionFunction for Tips2021 {
                     molecule,
                     isotopologue,
                 })?;
-        if !(entry.t_first <= temperature && temperature <= entry.t_last()) {
-            return Err(Error::OutsideTable {
-                molecule,
-                isotopologue,
-                temperature,
-            });
-        }
-        evaluate_table(entry.table(), molecule, isotopologue, temperature)
+        check_range(
+            (entry.t_first, entry.t_last()),
+            molecule,
+            isotopologue,
+            temperature,
+        )?;
+        let (ln_q, dlnq_dt) = entry.table().evaluate(temperature);
+        Ok(PartitionValue {
+            q: ln_q.exp(),
+            dlnq_dt,
+        })
     }
 }
