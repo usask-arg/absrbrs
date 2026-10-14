@@ -65,9 +65,9 @@ def test_core_errors_map_to_their_classes(kwargs, cls, message, attributes):
 )
 def test_io_errors_are_oserrors_of_their_kind(kind, cls):
     with pytest.raises(OSError) as info:
-        _testing.raise_core_error("Io", path="CO2.par", kind=kind, message="No such file")
+        _testing.raise_core_error("Io", path="CO2.par", kind=kind, message="failure")
     assert type(info.value) is cls
-    assert str(info.value) == "cannot read CO2.par: No such file"
+    assert str(info.value) == "cannot read CO2.par: failure"
 
 
 def test_unknown_variant_and_kind_are_rejected():

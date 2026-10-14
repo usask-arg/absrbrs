@@ -6,6 +6,10 @@
 //! carries a `source()` chain.
 
 /// Errors returned by absrbrs.
+///
+/// A new variant also needs an arm in `absrbrs-py/src/errors.rs` (`to_pyerr`), a class in
+/// `python/absrbrs/errors.py` if it should not surface as a plain `AbsrbrsError`, and a case in
+/// the `_testing.raise_core_error` hook with a test in `tests/test_errors.py`.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
