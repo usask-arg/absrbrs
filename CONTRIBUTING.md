@@ -110,4 +110,5 @@ One-time repository setup:
 - Trusted Publishers on PyPI and crates.io for this repository's `release.yml`.
 - First-release order: Trusted Publishing needs an existing crate, so publish the first crate
   version to crates.io by hand and configure its Trusted Publisher before pushing the first
-  tag. Otherwise the tag publishes to PyPI and then the crates.io job fails.
+  tag. That first tag's crates.io job then fails with "already exists", which is expected
+  (PyPI still publishes); later tags publish both.
