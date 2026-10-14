@@ -87,10 +87,10 @@ Every command runs from the repository root, `/Users/djz828/dev/absrbrs`, unless
   - `InvalidInput(String)`
   - `MissingPartitionFunction { molecule: u16, isotopologue: u16 }`
   - `OutsideTable { molecule: u16, isotopologue: u16, temperature: f64 }`
-  - `Parse { line_number: usize, message: String }`
-  - `Io { path: String, message: String }`
+  - `Parse { path: String, line_number: usize, message: String }`
+  - `Io { path: String, kind: std::io::ErrorKind, message: String }`
 
-  It derives `Debug, Clone, PartialEq, thiserror::Error`. The `Display` texts are exactly those asserted in the test below. Task 2 maps them onto Python exceptions.
+  It derives `Debug, Clone, PartialEq, thiserror::Error`, and it is `Send + Sync + 'static`. The `Display` texts are exactly those asserted in the tests below. Task 2 maps them onto Python exceptions.
 
 - [ ] **Step 1: Write the workspace and crate manifests**
 
@@ -219,20 +219,39 @@ mod tests {
         );
         assert_eq!(
             Error::Parse {
+                path: "CO2.par".into(),
                 line_number: 17,
                 message: "bad width".into()
             }
             .to_string(),
-            "line 17: bad width"
+            "CO2.par, line 17: bad width"
         );
         assert_eq!(
             Error::Io {
                 path: "CO2.par".into(),
+                kind: std::io::ErrorKind::NotFound,
                 message: "No such file".into()
             }
             .to_string(),
             "cannot read CO2.par: No such file"
         );
+    }
+
+    #[test]
+    fn extreme_temperatures_print_compactly() {
+        let message = Error::OutsideTable {
+            molecule: 1,
+            isotopologue: 1,
+            temperature: 1e300,
+        }
+        .to_string();
+        assert!(message.starts_with("temperature 1e300 K "), "{message}");
+    }
+
+    #[test]
+    fn error_is_send_sync_and_static() {
+        fn check<T: Send + Sync + 'static>() {}
+        check::<Error>();
     }
 }
 ```
@@ -249,6 +268,11 @@ Replace `absrbrs/src/error.rs` with the full file:
 
 ```rust
 //! Error type shared by every absrbrs computation (spec §7.4).
+//!
+//! [`Error`] is `Clone` and `PartialEq` so that results can be compared in tests and stored
+//! freely. It therefore holds only owned, comparable data: an I/O failure keeps its
+//! [`std::io::ErrorKind`] and message rather than the `std::io::Error` itself, and no variant
+//! carries a `source()` chain.
 
 /// Errors returned by absrbrs.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -268,20 +292,22 @@ pub enum Error {
     },
     /// A temperature is outside the range of a partition-function table.
     #[error(
-        "temperature {temperature} K is outside the partition-function table of molecule \
+        "temperature {temperature:?} K is outside the partition-function table of molecule \
          {molecule}, isotopologue {isotopologue}"
     )]
     OutsideTable {
         /// HITRAN molecule number.
         molecule: u16,
-        /// HITRAN isotopologue number.
+        /// HITRAN isotopologue number (codes 0, A and B are 10, 11 and 12).
         isotopologue: u16,
         /// The temperature requested, in K.
         temperature: f64,
     },
     /// A record of a line file is malformed.
-    #[error("line {line_number}: {message}")]
+    #[error("{path}, line {line_number}: {message}")]
     Parse {
+        /// The file, as given, or a description such as `<string>` for input from memory.
+        path: String,
         /// One-based line number of the record in its file.
         line_number: usize,
         /// What is wrong with the record.
@@ -292,6 +318,8 @@ pub enum Error {
     Io {
         /// The path, as given.
         path: String,
+        /// The kind of failure, which tells a missing file from other failures.
+        kind: std::io::ErrorKind,
         /// The operating system's description of the failure.
         message: String,
     },
@@ -330,20 +358,39 @@ mod tests {
         );
         assert_eq!(
             Error::Parse {
+                path: "CO2.par".into(),
                 line_number: 17,
                 message: "bad width".into()
             }
             .to_string(),
-            "line 17: bad width"
+            "CO2.par, line 17: bad width"
         );
         assert_eq!(
             Error::Io {
                 path: "CO2.par".into(),
+                kind: std::io::ErrorKind::NotFound,
                 message: "No such file".into()
             }
             .to_string(),
             "cannot read CO2.par: No such file"
         );
+    }
+
+    #[test]
+    fn extreme_temperatures_print_compactly() {
+        let message = Error::OutsideTable {
+            molecule: 1,
+            isotopologue: 1,
+            temperature: 1e300,
+        }
+        .to_string();
+        assert!(message.starts_with("temperature 1e300 K "), "{message}");
+    }
+
+    #[test]
+    fn error_is_send_sync_and_static() {
+        fn check<T: Send + Sync + 'static>() {}
+        check::<Error>();
     }
 }
 ```
@@ -356,7 +403,7 @@ cargo test -p absrbrs
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
-Expected: `test error::tests::messages_are_informative ... ok`, then `test result: ok. 1 passed`. Clippy reports no warnings, and fmt prints nothing.
+Expected: `test result: ok. 3 passed` (`messages_are_informative`, `extreme_temperatures_print_compactly`, `error_is_send_sync_and_static`). Clippy reports no warnings, and fmt prints nothing.
 
 - [ ] **Step 6: Add the licence, README and changelog**
 
@@ -442,9 +489,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
     - `InvalidInputError(AbsrbrsError, ValueError)`
     - `MissingPartitionFunctionError(AbsrbrsError, LookupError)` with attributes `molecule` and `isotopologue`
     - `OutsideTableError(AbsrbrsError, ValueError)` with attributes `molecule`, `isotopologue` and `temperature`
-    - `ParseError(AbsrbrsError, ValueError)` with attribute `line_number`
-  - The Rust function `absrbrs_py::errors::to_pyerr(py, absrbrs::Error) -> PyErr`, which maps `Io` to the built-in `OSError`. Later phases call it from every binding.
-  - The test hook `absrbrs._absrbrs._testing.raise_core_error(variant, message="", molecule=0, isotopologue=0, temperature=0.0, line_number=0, path="")`.
+    - `ParseError(AbsrbrsError, ValueError)` with attributes `path` and `line_number`
+  - The Rust function `absrbrs_py::errors::to_pyerr(py, absrbrs::Error) -> PyErr`. It maps `Io` to the built-in `FileNotFoundError` (kind `NotFound`), `PermissionError` (kind `PermissionDenied`) or `OSError` (any other kind). Later phases call it from every binding.
+  - The test hook `absrbrs._absrbrs._testing.raise_core_error(variant, message="", molecule=0, isotopologue=0, temperature=0.0, line_number=0, path="", kind="Other")`.
   - `absrbrs.__version__`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -561,10 +608,10 @@ def test_hierarchy():
             {"molecule": 2, "isotopologue": 1, "temperature": 6000.5},
         ),
         (
-            {"variant": "Parse", "line_number": 17, "message": "bad width"},
+            {"variant": "Parse", "path": "CO2.par", "line_number": 17, "message": "bad width"},
             absrbrs.ParseError,
-            "line 17: bad width",
-            {"line_number": 17},
+            "CO2.par, line 17: bad width",
+            {"path": "CO2.par", "line_number": 17},
         ),
     ],
 )
@@ -577,14 +624,22 @@ def test_core_errors_map_to_their_classes(kwargs, cls, message, attributes):
         assert getattr(info.value, name) == value
 
 
-def test_io_errors_are_oserrors():
-    with pytest.raises(OSError, match=r"^cannot read CO2\.par: No such file$"):
-        _testing.raise_core_error("Io", path="CO2.par", message="No such file")
+@pytest.mark.parametrize(
+    ("kind", "cls"),
+    [("NotFound", FileNotFoundError), ("PermissionDenied", PermissionError), ("Other", OSError)],
+)
+def test_io_errors_are_oserrors_of_their_kind(kind, cls):
+    with pytest.raises(OSError) as info:
+        _testing.raise_core_error("Io", path="CO2.par", kind=kind, message="No such file")
+    assert type(info.value) is cls
+    assert str(info.value) == "cannot read CO2.par: No such file"
 
 
-def test_unknown_variant_is_rejected():
+def test_unknown_variant_and_kind_are_rejected():
     with pytest.raises(ValueError, match="unknown absrbrs::Error variant"):
         _testing.raise_core_error("Nope")
+    with pytest.raises(ValueError, match="unknown std::io::ErrorKind"):
+        _testing.raise_core_error("Io", kind="Nope")
 
 
 def test_falls_back_to_runtime_error_when_the_classes_cannot_be_imported(monkeypatch):
@@ -599,7 +654,7 @@ def test_falls_back_to_runtime_error_when_the_classes_cannot_be_imported(monkeyp
     [
         absrbrs.MissingPartitionFunctionError("m", 2, 11),
         absrbrs.OutsideTableError("m", 2, 1, 7000.0),
-        absrbrs.ParseError("m", 3),
+        absrbrs.ParseError("m", "CO2.par", 3),
     ],
 )
 def test_errors_pickle_with_their_attributes(err):
@@ -773,21 +828,28 @@ Create `absrbrs-py/src/errors.rs`:
 ```rust
 //! Conversion of `absrbrs::Error` into the exception classes defined in `absrbrs.errors`.
 
-use pyo3::exceptions::{PyException, PyOSError, PyRuntimeError};
+use pyo3::exceptions::{
+    PyException, PyFileNotFoundError, PyOSError, PyPermissionError, PyRuntimeError,
+};
 use pyo3::prelude::*;
 
 /// The matching `absrbrs.errors` exception for a core error.
 ///
 /// The message is the error's `Display` text, and the structured fields of a variant become
-/// attributes of the exception. `Io` maps to the built-in `OSError`. Variants added to the
+/// attributes of the exception. `Io` maps to the built-in `FileNotFoundError`,
+/// `PermissionError` or (for other kinds of failure) `OSError`. Variants added to the
 /// non-exhaustive `absrbrs::Error` later map to `AbsrbrsError` until they get a class of their
 /// own. If building the exception fails with an `Exception` (say `absrbrs.errors` cannot be
 /// imported), the result is a `RuntimeError` with the core message, caused by that exception;
 /// any other failure (`KeyboardInterrupt`, ...) is returned unchanged.
 pub fn to_pyerr(py: Python<'_>, err: absrbrs::Error) -> PyErr {
     let message = err.to_string();
-    if let absrbrs::Error::Io { .. } = err {
-        return PyOSError::new_err(message);
+    if let absrbrs::Error::Io { kind, .. } = err {
+        return match kind {
+            std::io::ErrorKind::NotFound => PyFileNotFoundError::new_err(message),
+            std::io::ErrorKind::PermissionDenied => PyPermissionError::new_err(message),
+            _ => PyOSError::new_err(message),
+        };
     }
     let build = || -> PyResult<PyErr> {
         let module = py.import("absrbrs.errors")?;
@@ -813,9 +875,13 @@ pub fn to_pyerr(py: Python<'_>, err: absrbrs::Error) -> PyErr {
                 *isotopologue,
                 *temperature,
             ))?,
-            absrbrs::Error::Parse { line_number, .. } => module
-                .getattr("ParseError")?
-                .call1((message.as_str(), *line_number))?,
+            absrbrs::Error::Parse {
+                path, line_number, ..
+            } => module.getattr("ParseError")?.call1((
+                message.as_str(),
+                path.as_str(),
+                *line_number,
+            ))?,
             _ => module.getattr("AbsrbrsError")?.call1((message.as_str(),))?,
         };
         Ok(PyErr::from_value(instance))
@@ -865,11 +931,12 @@ pub fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
 /// [`to_pyerr`]. Not part of the absrbrs API.
 ///
 /// `variant` names an `absrbrs::Error` variant; the other arguments are its fields (each
-/// variant uses the ones it has).
+/// variant uses the ones it has). `kind` is the `std::io::ErrorKind` of `Io`: `"NotFound"`,
+/// `"PermissionDenied"` or `"Other"`.
 #[pyfunction]
 #[pyo3(signature = (
     variant, message = "", molecule = 0, isotopologue = 0, temperature = 0.0, line_number = 0,
-    path = ""
+    path = "", kind = "Other"
 ))]
 #[allow(clippy::too_many_arguments)]
 pub fn raise_core_error(
@@ -881,6 +948,7 @@ pub fn raise_core_error(
     temperature: f64,
     line_number: usize,
     path: &str,
+    kind: &str,
 ) -> PyResult<()> {
     let err = match variant {
         "InvalidInput" => absrbrs::Error::InvalidInput(message.into()),
@@ -894,11 +962,22 @@ pub fn raise_core_error(
             temperature,
         },
         "Parse" => absrbrs::Error::Parse {
+            path: path.into(),
             line_number,
             message: message.into(),
         },
         "Io" => absrbrs::Error::Io {
             path: path.into(),
+            kind: match kind {
+                "NotFound" => std::io::ErrorKind::NotFound,
+                "PermissionDenied" => std::io::ErrorKind::PermissionDenied,
+                "Other" => std::io::ErrorKind::Other,
+                _ => {
+                    return Err(PyValueError::new_err(format!(
+                        "unknown std::io::ErrorKind {kind:?}"
+                    )));
+                }
+            },
             message: message.into(),
         },
         _ => {
@@ -964,7 +1043,8 @@ Every absrbrs-specific failure is an :class:`AbsrbrsError`:
   of a partition-function table.
 * :class:`ParseError` (also a :class:`ValueError`): a record of a line file is malformed.
 
-A file that cannot be read raises the built-in :class:`OSError`.
+A file that cannot be read raises the built-in :class:`OSError`: :class:`FileNotFoundError` if
+it does not exist, :class:`PermissionError` if it may not be read.
 """
 
 from __future__ import annotations
@@ -1042,12 +1122,17 @@ class ParseError(AbsrbrsError, ValueError):
     ----------
     message : str
         Description of the failure.
+    path : str, optional
+        The file, as given, or a description such as ``<string>`` for input from memory.
     line_number : int, optional
         One-based line number of the record in its file.
     """
 
-    def __init__(self, message: str, line_number: int | None = None) -> None:
+    def __init__(
+        self, message: str, path: str | None = None, line_number: int | None = None
+    ) -> None:
         super().__init__(message)
+        self.path = path
         self.line_number = line_number
 ```
 
@@ -1082,6 +1167,7 @@ def raise_core_error(
     temperature: float = 0.0,
     line_number: int = 0,
     path: str = "",
+    kind: str = "Other",
 ) -> NoReturn: ...
 ```
 
@@ -1100,7 +1186,7 @@ cargo fmt --all -- --check
 ```
 
 Expected:
-- pytest: `18 passed`;
+- pytest: `20 passed`;
 - stubtest: `Success: no issues found in 2 modules`;
 - ruff: `All checks passed!`, and every file already formatted;
 - clippy and fmt: clean.
@@ -1519,7 +1605,7 @@ cargo package -p absrbrs --allow-dirty
 ```
 
 Expected:
-- tests: `test result: ok. 1 passed` (unit), then `test result: ok. 2 passed` (`reference_data`);
+- tests: `test result: ok. 3 passed` (unit), then `test result: ok. 2 passed` (`reference_data`);
 - clippy, fmt and ruff: clean;
 - `cargo package` succeeds, which shows that the published crate builds without `tests/`.
 

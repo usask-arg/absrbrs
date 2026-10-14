@@ -357,8 +357,8 @@ lbl.cross_section_vjp(&grid, &conditions, grad, &mut line_grad, pool)?;     // a
 | `InvalidInput(String)` | the grid is not strictly increasing; T ≤ 0; p < 0; VMR is outside [0, 1]; an input is NaN or infinite; a buffer shape is wrong; an output size exceeds its limit |
 | `MissingPartitionFunction { molecule, isotopologue }` | an isotopologue has no partition function |
 | `OutsideTable { molecule, isotopologue, temperature }` | T is outside the partition-function table |
-| `Parse { line_number, message }` | a line-file record is malformed |
-| `Io(…)` | a file cannot be read |
+| `Parse { path, line_number, message }` | a line-file record is malformed |
+| `Io { path, kind, message }` | a file cannot be read; `kind` is the `std::io::ErrorKind`, so a missing file can be told from other failures |
 
 ## 8. Validation
 
