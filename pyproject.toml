@@ -9,7 +9,7 @@ dynamic = ["version"]
 description = "Molecular absorption cross sections with first-class linearization"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE", "absrbrs/LICENSES/Faddeeva-MIT.txt"]
+license-files = ["LICENSE", "absrbrs/LICENSES/Faddeeva-MIT.txt", "absrbrs/LICENSES/HAPI-MIT.txt"]
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26"]
 classifiers = [
