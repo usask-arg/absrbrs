@@ -49,9 +49,9 @@ def table_markdown(
             best.regions, best.region_errors, best.occupancy, strict=True
         ):
             method = f"{region.method[0]} {region.method[1]}"
+            name = region.name.replace("|", r"\|")  # names such as "CF |z| in [8, 10)"
             lines.append(
-                f"| {region.name} | {method} | {_fmt(errors[0])} | {_fmt(errors[1])} "
-                f"| {share:.2%} |"
+                f"| {name} | {method} | {_fmt(errors[0])} | {_fmt(errors[1])} | {share:.2%} |"
             )
     return "\n".join(lines) + "\n"
 
@@ -102,16 +102,24 @@ def main(argv: list[str] | None = None) -> int:
         },
         "workload_points": int(workload.size),
         "baselines": {
-            name: {**r.to_json(), "holdout": list(holdout[name])} for name, r in baselines.items()
+            name: {**r.to_json(), "holdout": [search.json_float(e) for e in holdout[name]]}
+            for name, r in baselines.items()
         },
         "valid_composites": len(results),
         "rejected_on_holdout": rejected,
         "selected": (
-            {**best.to_json(), "holdout": list(holdout["**Selected composite**"])} if best else None
+            {
+                **best.to_json(),
+                "holdout": [search.json_float(e) for e in holdout["**Selected composite**"]],
+            }
+            if best
+            else None
         ),
     }
     args.json.parent.mkdir(parents=True, exist_ok=True)
-    args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    args.json.write_text(
+        json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
+    )
     markdown = table_markdown(baselines, best, holdout)
     args.table.write_text(markdown, encoding="utf-8")
     print(markdown, file=sys.stderr)

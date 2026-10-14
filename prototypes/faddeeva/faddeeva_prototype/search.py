@@ -17,6 +17,7 @@ from numpy.typing import NDArray
 
 from faddeeva_prototype.candidates import evaluate
 from faddeeva_prototype.metrics import derivative_error, value_error
+from faddeeva_prototype.reference import BAND_EDGES, GAUSS_X_MAX
 
 Key = tuple[str, int]
 
@@ -121,11 +122,19 @@ def meets(errors: tuple[float, float]) -> bool:
 def minimal_parameter(
     table: ErrorTable, name: str, mask: NDArray[np.bool_], params: range
 ) -> int | None:
-    """The smallest parameter of method ``name`` that meets the targets on ``mask``."""
+    """The smallest parameter of method ``name`` that meets the targets on ``mask``; None if
+    none does, or if ``mask`` is empty (a region without evaluation points is untested)."""
+    if not mask.any():
+        return None
     for p in params:
         if meets(table.worst((name, p), mask)):
             return p
     return None
+
+
+def json_float(v: float) -> float | None:
+    """``v``, or None (JSON null) if it is infinite: JSON has no infinity."""
+    return v if math.isfinite(v) else None
 
 
 @dataclass
@@ -140,19 +149,24 @@ class Result:
     occupancy: list[float]
 
     def to_json(self) -> dict:
+        """The composite as strict JSON: unbounded region limits, and errors that are infinite
+        (a NaN somewhere), are written as null."""
         return {
             "regions": [
                 {
-                    **asdict(r),
+                    **{
+                        k: json_float(v) if isinstance(v, float) else v
+                        for k, v in asdict(r).items()
+                    },
                     "method": list(r.method),
-                    "max_value_error": e[0],
-                    "max_derivative_error": e[1],
+                    "max_value_error": json_float(e[0]),
+                    "max_derivative_error": json_float(e[1]),
                     "occupancy": o,
                 }
                 for r, e, o in zip(self.regions, self.region_errors, self.occupancy, strict=True)
             ],
-            "max_value_error": self.max_value_error,
-            "max_derivative_error": self.max_derivative_error,
+            "max_value_error": json_float(self.max_value_error),
+            "max_derivative_error": json_float(self.max_derivative_error),
             "expected_cost": self.expected_cost,
         }
 
@@ -203,11 +217,6 @@ BASELINES: dict[str, list[Region]] = {
     "Weideman 32": [Region("all", ("weideman", 32))],
     "Weideman 40": [Region("all", ("weideman", 40))],
 }
-
-#: Band edges in |z| for the continued fraction; each band gets its own minimal depth.
-BAND_EDGES = (8.0, 10.0, 12.0, 15.0, 20.0, 30.0, 50.0, 100.0, 300.0, 1000.0, 3000.0)
-#: The Gaussian term exp(−x²) underflows beyond |x| = 27.
-GAUSS_X_MAX = 27.0
 
 
 def build(

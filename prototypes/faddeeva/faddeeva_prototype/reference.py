@@ -24,12 +24,19 @@ COMMITTED = REPO / "reference" / "data" / "faddeeva.jsonl"
 CACHE = PROTOTYPE / ".cache" / "dense.npz"
 HOLDOUT_CACHE = PROTOTYPE / ".cache" / "holdout.npz"
 
-#: Region boundaries that the `search` template chooses between, in |x| (or |z|, which equals
-#: |x| at small y) and in y. A region's errors peak at its edges, so the dense grid samples
-#: each boundary and the double on its other side.
-X_EDGES = (
-    4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 27.0, 30.0, 50.0, 100.0, 300.0, 1000.0, 3000.0,
+#: Candidate edges in |z| of the continued-fraction bands: `search.build` gives each band its
+#: own minimal depth, so the edges where the depth can drop are where the cost is decided.
+BAND_EDGES = (
+    8.0, 9.0, 10.0, 11.0, 12.0, 13.5, 15.0, 17.5, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0,
+    60.0, 75.0, 100.0, 150.0, 200.0, 300.0, 500.0, 1000.0, 1250.0, 1500.0, 1750.0, 2000.0,
+    2500.0, 3000.0,
 )  # fmt: skip
+#: The exp + CF region ends here: exp(−x²) underflows beyond |x| = 27.
+GAUSS_X_MAX = 27.0
+#: Every boundary that the `search` template chooses between, in |x| (or |z|, which equals |x|
+#: at small y) and in y; they include every threshold of `search.GRID`. A region's errors peak
+#: at its edges, so the dense grid samples each boundary and the double on its other side.
+X_EDGES = (4.0, 5.0, 6.0, GAUSS_X_MAX, *BAND_EDGES)
 Y_EDGES = (1e-3, 1e-2, 0.1, 0.5)
 HOLDOUT_POINTS = 400_000
 HOLDOUT_SEED = 20261014

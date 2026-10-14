@@ -18,12 +18,12 @@
           ],
           "name": "all",
           "occupancy": 1.0,
-          "r_max": Infinity,
+          "r_max": null,
           "r_min": 0.0,
           "s_min": 0.0,
-          "x_max": Infinity,
+          "x_max": null,
           "x_min": 0.0,
-          "y_max": Infinity
+          "y_max": null
         }
       ]
     },
@@ -45,12 +45,12 @@
           ],
           "name": "all",
           "occupancy": 1.0,
-          "r_max": Infinity,
+          "r_max": null,
           "r_min": 0.0,
           "s_min": 0.0,
-          "x_max": Infinity,
+          "x_max": null,
           "x_min": 0.0,
-          "y_max": Infinity
+          "y_max": null
         }
       ]
     },
@@ -72,12 +72,12 @@
           ],
           "name": "Humlicek I",
           "occupancy": 0.9945338799453388,
-          "r_max": Infinity,
+          "r_max": null,
           "r_min": 0.0,
           "s_min": 15.0,
-          "x_max": Infinity,
+          "x_max": null,
           "x_min": 0.0,
-          "y_max": Infinity
+          "y_max": null
         },
         {
           "max_derivative_error": 1.0162225693243467e-08,
@@ -88,12 +88,12 @@
           ],
           "name": "Weideman 24",
           "occupancy": 0.005466120054661201,
-          "r_max": Infinity,
+          "r_max": null,
           "r_min": 0.0,
           "s_min": 0.0,
-          "x_max": Infinity,
+          "x_max": null,
           "x_min": 0.0,
-          "y_max": Infinity
+          "y_max": null
         }
       ]
     },
@@ -115,30 +115,30 @@
           ],
           "name": "all",
           "occupancy": 1.0,
-          "r_max": Infinity,
+          "r_max": null,
           "r_min": 0.0,
           "s_min": 0.0,
-          "x_max": Infinity,
+          "x_max": null,
           "x_min": 0.0,
-          "y_max": Infinity
+          "y_max": null
         }
       ]
     }
   },
   "evaluation_points": {
     "committed": 9176,
-    "dense": 147626,
+    "dense": 155208,
     "holdout": 400000
   },
   "rejected_on_holdout": 0,
   "selected": {
-    "expected_cost": 60.837249608372495,
+    "expected_cost": 54.61520514615205,
     "holdout": [
-      4.751327653904498e-07,
+      4.89577499369126e-07,
       1.7883620293008184e-06
     ],
     "max_derivative_error": 1.7905910418102135e-06,
-    "max_value_error": 4.7534903798502433e-07,
+    "max_value_error": 4.897960785527865e-07,
     "regions": [
       {
         "max_derivative_error": 1.4059843809978533e-07,
@@ -149,7 +149,7 @@
         ],
         "name": "exp + CF",
         "occupancy": 0.0028330500283305004,
-        "r_max": Infinity,
+        "r_max": null,
         "r_min": 0.0,
         "s_min": 0.0,
         "x_max": 27.0,
@@ -163,14 +163,30 @@
           "cf",
           4
         ],
-        "name": "CF |z| in [8, 10)",
-        "occupancy": 0.0004999500049995,
-        "r_max": 10.0,
+        "name": "CF |z| in [8, 9)",
+        "occupancy": 0.00026664000266640004,
+        "r_max": 9.0,
         "r_min": 8.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 3.6279152118939566e-07,
+        "max_value_error": 3.6280914187687007e-07,
+        "method": [
+          "cf",
+          3
+        ],
+        "name": "CF |z| in [9, 10)",
+        "occupancy": 0.00023331000233310002,
+        "r_max": 10.0,
+        "r_min": 9.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 1.5176156569490153e-07,
@@ -179,14 +195,30 @@
           "cf",
           3
         ],
-        "name": "CF |z| in [10, 12)",
-        "occupancy": 0.0004999500049995,
-        "r_max": 12.0,
+        "name": "CF |z| in [10, 11)",
+        "occupancy": 0.00026664000266640004,
+        "r_max": 11.0,
         "r_min": 10.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 6.933492862641575e-08,
+        "max_value_error": 6.933712842376298e-08,
+        "method": [
+          "cf",
+          3
+        ],
+        "name": "CF |z| in [11, 12)",
+        "occupancy": 0.00023331000233310002,
+        "r_max": 12.0,
+        "r_min": 11.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 3.4026642012559456e-08,
@@ -195,14 +227,30 @@
           "cf",
           3
         ],
-        "name": "CF |z| in [12, 15)",
-        "occupancy": 0.00114988501149885,
-        "r_max": 15.0,
+        "name": "CF |z| in [12, 13.5)",
+        "occupancy": 0.00064993500649935,
+        "r_max": 13.5,
         "r_min": 12.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 1.3035703113207856e-08,
+        "max_value_error": 1.3035973312842118e-08,
+        "method": [
+          "cf",
+          3
+        ],
+        "name": "CF |z| in [13.5, 15)",
+        "occupancy": 0.0004999500049995,
+        "r_max": 15.0,
+        "r_min": 13.5,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 4.753438661762316e-07,
@@ -211,14 +259,30 @@
           "cf",
           2
         ],
-        "name": "CF |z| in [15, 20)",
-        "occupancy": 0.0015331800153318002,
-        "r_max": 20.0,
+        "name": "CF |z| in [15, 17.5)",
+        "occupancy": 0.0007999200079992001,
+        "r_max": 17.5,
         "r_min": 15.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 1.869561950981734e-07,
+        "max_value_error": 1.8695768173701433e-07,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [17.5, 20)",
+        "occupancy": 0.0007332600073326,
+        "r_max": 20.0,
+        "r_min": 17.5,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 8.345894820311985e-08,
@@ -227,14 +291,30 @@
           "cf",
           2
         ],
-        "name": "CF |z| in [20, 30)",
-        "occupancy": 0.0032996700329967,
-        "r_max": 30.0,
+        "name": "CF |z| in [20, 25)",
+        "occupancy": 0.0014998500149985001,
+        "r_max": 25.0,
         "r_min": 20.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 2.1742174424761383e-08,
+        "max_value_error": 2.1742258433609176e-08,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [25, 30)",
+        "occupancy": 0.0017998200179982,
+        "r_max": 30.0,
+        "r_min": 25.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 7.256897197944611e-09,
@@ -243,14 +323,62 @@
           "cf",
           2
         ],
-        "name": "CF |z| in [30, 50)",
-        "occupancy": 0.0084991500849915,
-        "r_max": 50.0,
+        "name": "CF |z| in [30, 35)",
+        "occupancy": 0.0021331200213312003,
+        "r_max": 35.0,
         "r_min": 30.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 2.8720213125871323e-09,
+        "max_value_error": 2.8720213350155365e-09,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [35, 40)",
+        "occupancy": 0.0021664500216645004,
+        "r_max": 40.0,
+        "r_min": 35.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 1.2872531345497878e-09,
+        "max_value_error": 1.2872531216798118e-09,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [40, 45)",
+        "occupancy": 0.0020997900209979003,
+        "r_max": 45.0,
+        "r_min": 40.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 6.343911306105209e-10,
+        "max_value_error": 6.343911207849128e-10,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [45, 50)",
+        "occupancy": 0.0020997900209979003,
+        "r_max": 50.0,
+        "r_min": 45.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 4.0054493350941447e-07,
@@ -259,14 +387,46 @@
           "cf",
           1
         ],
-        "name": "CF |z| in [50, 100)",
-        "occupancy": 0.0210645602106456,
-        "r_max": 100.0,
+        "name": "CF |z| in [50, 60)",
+        "occupancy": 0.004232910042329101,
+        "r_max": 60.0,
         "r_min": 50.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 1.93083636272255e-07,
+        "max_value_error": 1.9308363632846536e-07,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [60, 75)",
+        "occupancy": 0.006332700063327001,
+        "r_max": 75.0,
+        "r_min": 60.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 7.906014113760268e-08,
+        "max_value_error": 7.90601411068979e-08,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [75, 100)",
+        "occupancy": 0.010498950104989501,
+        "r_max": 100.0,
+        "r_min": 75.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 2.5008503881585998e-08,
@@ -275,14 +435,46 @@
           "cf",
           1
         ],
-        "name": "CF |z| in [100, 300)",
-        "occupancy": 0.0842582408425824,
-        "r_max": 300.0,
+        "name": "CF |z| in [100, 150)",
+        "occupancy": 0.021097890210978902,
+        "r_max": 150.0,
         "r_min": 100.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 4.939018123127422e-09,
+        "max_value_error": 4.9390183074474616e-09,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [150, 200)",
+        "occupancy": 0.0210645602106456,
+        "r_max": 200.0,
+        "r_min": 150.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 1.5626331986683635e-09,
+        "max_value_error": 1.5626331428822508e-09,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [200, 300)",
+        "occupancy": 0.0420957904209579,
+        "r_max": 300.0,
+        "r_min": 200.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 3.0865394051777933e-10,
@@ -291,14 +483,30 @@
           "cf",
           1
         ],
-        "name": "CF |z| in [300, 1000)",
-        "occupancy": 0.294637202946372,
-        "r_max": 1000.0,
+        "name": "CF |z| in [300, 500)",
+        "occupancy": 0.0841582508415825,
+        "r_max": 500.0,
         "r_min": 300.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 4.000092383065676e-11,
+        "max_value_error": 4.000099104726505e-11,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [500, 1000)",
+        "occupancy": 0.2104789521047895,
+        "r_max": 1000.0,
+        "r_min": 500.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 2.5002771769244013e-12,
@@ -307,14 +515,94 @@
           "cf",
           1
         ],
-        "name": "CF |z| in [1000, 3000)",
-        "occupancy": 0.44638869446388696,
-        "r_max": 3000.0,
+        "name": "CF |z| in [1000, 1250)",
+        "occupancy": 0.10532280105322801,
+        "r_max": 1250.0,
         "r_min": 1000.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 1.0243937018433637e-12,
+        "max_value_error": 1.024503078736859e-12,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [1250, 1500)",
+        "occupancy": 0.10518948105189481,
+        "r_max": 1500.0,
+        "r_min": 1250.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 4.94034754278217e-13,
+        "max_value_error": 4.941619784601181e-13,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [1500, 1750)",
+        "occupancy": 0.08055861080558611,
+        "r_max": 1750.0,
+        "r_min": 1500.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 4.897960784708433e-07,
+        "max_value_error": 4.897960785527865e-07,
+        "method": [
+          "cf",
+          0
+        ],
+        "name": "CF |z| in [1750, 2000)",
+        "occupancy": 0.032896710328967106,
+        "r_max": 2000.0,
+        "r_min": 1750.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 3.7500009405147867e-07,
+        "max_value_error": 3.750000940252216e-07,
+        "method": [
+          "cf",
+          0
+        ],
+        "name": "CF |z| in [2000, 2500)",
+        "occupancy": 0.061227210612272105,
+        "r_max": 2500.0,
+        "r_min": 2000.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
+      },
+      {
+        "max_derivative_error": 2.4000003853851095e-07,
+        "max_value_error": 2.400000386679375e-07,
+        "method": [
+          "cf",
+          0
+        ],
+        "name": "CF |z| in [2500, 3000)",
+        "occupancy": 0.061193880611938804,
+        "r_max": 3000.0,
+        "r_min": 2500.0,
+        "s_min": 0.0,
+        "x_max": null,
+        "x_min": 0.0,
+        "y_max": null
       },
       {
         "max_derivative_error": 1.6666668532353081e-07,
@@ -325,12 +613,12 @@
         ],
         "name": "CF |z| in [3000, inf)",
         "occupancy": 0.1326867313268673,
-        "r_max": Infinity,
+        "r_max": null,
         "r_min": 3000.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
       },
       {
         "max_derivative_error": 1.7905910418102135e-06,
@@ -341,7 +629,7 @@
         ],
         "name": "Taylor",
         "occupancy": 0.0007665900076659001,
-        "r_max": Infinity,
+        "r_max": null,
         "r_min": 0.0,
         "s_min": 0.0,
         "x_max": 6.0,
@@ -357,12 +645,12 @@
         ],
         "name": "weideman 24",
         "occupancy": 0.0018831450188314502,
-        "r_max": Infinity,
+        "r_max": null,
         "r_min": 0.0,
         "s_min": 0.0,
-        "x_max": Infinity,
+        "x_max": null,
         "x_min": 0.0,
-        "y_max": Infinity
+        "y_max": null
       }
     ]
   },
