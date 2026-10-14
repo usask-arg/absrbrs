@@ -10,11 +10,16 @@ TINY = float(np.finfo(np.float64).tiny)
 
 
 def value_error(w: NDArray[np.complex128], w_ref: NDArray[np.complex128]) -> NDArray[np.float64]:
-    """|K − K_ref| / K_ref, with K = Re w; 0 where K_ref < TINY."""
+    """|K − K_ref| / K_ref, with K = Re w.
+
+    Where K_ref < TINY the point is exempt: the error is 0 if K is finite and NaN otherwise. A
+    NaN anywhere else (in K or K_ref) gives a NaN error, so it is never hidden.
+    """
     k = w_ref.real
     with np.errstate(all="ignore"):
         err = np.abs(w.real - k) / k
-    return np.where(k >= TINY, err, 0.0)
+    exempt = np.where(np.isfinite(w.real), 0.0, np.nan)
+    return np.where(k < TINY, exempt, err)
 
 
 def derivative_error(

@@ -1,8 +1,13 @@
 """Candidate approximations of the Faddeeva function w(z) = exp(-z²) erfc(-iz), for Im z ≥ 0.
 
-Every candidate returns ``(w, dw)``: w(z) and its derivative w′(z), both from the same formula
-(the derivative of the approximation itself, never the identity w′ = −2zw + 2i/√π), as
-complex128 arrays shaped like ``z``.
+Every candidate returns ``(w, dw)`` as complex128 arrays shaped like ``z``: w(z), and
+dw = K_x − i K_y, where K_x and K_y are the x- and y-derivatives of K = Re w *of the candidate's
+own formula*. For the analytic candidates dw is the derivative w′(z) of the approximation (never
+the identity w′ = −2zw + 2i/√π applied to it); for the Taylor series, which is not analytic in
+z, it is built from the formula's two partial derivatives.
+
+Each candidate is meant for part of the upper half-plane only, as its docstring says; the
+composites of `search` use them only there.
 """
 
 from __future__ import annotations
@@ -13,6 +18,8 @@ from math import factorial
 import numpy as np
 from numpy.typing import NDArray
 from scipy.special import dawsn
+
+from faddeeva_prototype.reference import complex_points
 
 Complex = NDArray[np.complex128]
 
@@ -62,7 +69,9 @@ def weideman_coefficients(n: int) -> tuple[NDArray[np.float64], float]:
     t = big_l * np.tan(k * np.pi / (2 * m))
     f = np.concatenate([[0.0], np.exp(-(t**2)) * (big_l**2 + t**2)])
     a = np.real(np.fft.fft(np.fft.fftshift(f))) / (2 * m)
-    return a[1 : n + 1][::-1].copy(), float(big_l)
+    a = a[1 : n + 1][::-1].copy()
+    a.flags.writeable = False  # shared by every caller through the cache
+    return a, float(big_l)
 
 
 def weideman(z: Complex, n: int) -> tuple[Complex, Complex]:
@@ -81,7 +90,10 @@ def weideman(z: Complex, n: int) -> tuple[Complex, Complex]:
 def laplace_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
     """Laplace continued fraction truncated after ``depth`` levels:
     w ≈ (i/√π) / (z − ½/(z − 1/(z − (3/2)/(z − …)))). Depth 0 is the Lorentzian i/(√π z);
-    depth 1 is Humlíček's region-I formula iz/(√π (z² − ½))."""
+    depth 1 is Humlíček's region-I formula iz/(√π (z² − ½)).
+
+    An asymptotic expansion: accurate for large |z| only. The truncated fraction has poles on
+    the real axis (NaN there), all within |x| < 6 for depth ≤ 16; use it for |z| ≥ 8."""
     f = np.array(z, dtype=np.complex128, copy=True)
     fp = np.ones_like(f)
     for k in range(depth, 0, -1):
@@ -92,7 +104,8 @@ def laplace_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
 
 def gauss_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
     """exp(−z²) plus the continued fraction: keeps the Gaussian core that the asymptotic
-    expansion lacks, for small y and moderate |x|."""
+    expansion lacks, for small y and moderate |x|. exp(−z²) = exp(y² − x²) e^(−2ixy) overflows
+    for y above about 26.6, so this is for small y only."""
     g = np.exp(-(z * z))
     w, dw = laplace_cf(z, depth)
     return w + g, dw - 2 * z * g
@@ -101,7 +114,13 @@ def gauss_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
 def small_y_taylor(z: Complex, order: int) -> tuple[Complex, Complex]:
     """Taylor series in iy about the real axis, to (iy)^order:
     w(x + iy) ≈ Σₖ (iy)ᵏ w⁽ᵏ⁾(x)/k!, with w(x) = exp(−x²) + (2i/√π) D(x) (D: Dawson) and
-    w⁽ᵏ⁺¹⁾ = −2x w⁽ᵏ⁾ − 2k w⁽ᵏ⁻¹⁾."""
+    w⁽ᵏ⁺¹⁾ = −2x w⁽ᵏ⁾ − 2k w⁽ᵏ⁻¹⁾.
+
+    The truncated series is not analytic in z, so its y-derivative is not i times its
+    x-derivative: dw is built from ∂K/∂x = Re Σₖ (iy)ᵏ w⁽ᵏ⁺¹⁾/k! and
+    ∂K/∂y = Re(i Σₖ₍ₖ₌₀…ₙ₋₁₎ (iy)ᵏ w⁽ᵏ⁺¹⁾/k!) of the formula itself. On the real axis w′(x)
+    comes from the identity −2xw + 2i/√π, which loses about 2x² in relative accuracy: for
+    |x| ≲ 6 only."""
     x = z.real
     iy = 1j * z.imag
     w0 = np.exp(-(x * x)) + 2j * INV_SQRT_PI * dawsn(x)
@@ -109,12 +128,17 @@ def small_y_taylor(z: Complex, order: int) -> tuple[Complex, Complex]:
     for k in range(1, order + 1):
         derivs.append(-2 * x * derivs[k] - 2 * k * derivs[k - 1])
     w = np.zeros_like(w0)
-    dw = np.zeros_like(w0)
+    d_x = np.zeros_like(w0)
+    d_y = np.zeros_like(w0)
     for k in range(order + 1):
         c = iy**k / factorial(k)
         w = w + c * derivs[k]
-        dw = dw + c * derivs[k + 1]
-    return w, dw
+        d_x = d_x + c * derivs[k + 1]
+        if k < order:
+            d_y = d_y + c * derivs[k + 1]
+    k_x = d_x.real
+    k_y = (1j * d_y).real
+    return w, complex_points(k_x, -k_y)
 
 
 #: Every method the search may use, by key ``(name, parameter)``.
