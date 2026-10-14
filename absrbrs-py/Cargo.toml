@@ -1,0 +1,25 @@
+[package]
+name = "absrbrs-py"
+description = "Python extension module for absrbrs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "_absrbrs"
+crate-type = ["cdylib"]
+# The bindings are tested from Python (tests/*.py). As an extension module (see
+# .cargo/config.toml) the crate does not link libpython, so a Rust test harness for it would fail
+# to link on Linux (PyO3 issue #341).
+test = false
+doctest = false
+
+[dependencies]
+absrbrs = { path = "../absrbrs" }
+pyo3 = { version = "0.29", features = ["abi3-py311"] }
+
+[build-dependencies]
+pyo3-build-config = "0.29"

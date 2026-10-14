@@ -1,5 +1,5 @@
 [workspace]
-members = ["absrbrs"]
+members = ["absrbrs", "absrbrs-py"]
 resolver = "3"
 
 [workspace.package]
