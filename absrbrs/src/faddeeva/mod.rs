@@ -21,7 +21,10 @@ pub(crate) const FRAC_1_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 #[non_exhaustive]
 pub enum Tier {
     /// Value error ≤ 1e-6 relative to Re w; derivative error ≤ 1e-5 relative to |w′|. The
-    /// region-switched composite of docs/plans/phase-0-followups.md. The default.
+    /// region-switched composite of docs/plans/phase-0-followups.md. The default. Near the real
+    /// axis (y ≤ 0.01, |x| < 6) w is a Taylor series in y, which is not analytic in z; there the
+    /// derivative returned is K_x − iK_y of that formula, so its imaginary part is −K_y and not
+    /// ∂ Im w/∂x.
     #[default]
     Fast,
     /// Value error ≤ 2e-13 relative to Re w; derivative error ≤ 2e-12 relative to |w′|. Value
@@ -50,11 +53,8 @@ pub fn w(z: Complex64, tier: Tier) -> (Complex64, Complex64) {
         return (nan, nan);
     }
     let reflect = z.re < 0.0;
-    let z = if reflect {
-        Complex64::new(-z.re, z.im)
-    } else {
-        z
-    };
+    // `+ 0.0` turns y = −0.0 into +0.0, so −0.0 gives the same bits as +0.0 in every region.
+    let z = Complex64::new(if reflect { -z.re } else { z.re }, z.im + 0.0);
     let (w, dw) = match tier {
         Tier::Fast => fast::w_and_derivative(z),
         Tier::Accurate => accurate::w_and_derivative(z),

@@ -121,46 +121,52 @@ fn negative_or_nan_y_gives_nan() {
 
 #[test]
 fn negative_zero_y_is_accepted_and_equals_positive_zero() {
-    for x in [0.5, 30.0] {
-        let (w, dw) = faddeeva::w(Complex64::new(x, 0.0), Tier::Accurate);
-        let (wn, dwn) = faddeeva::w(Complex64::new(x, -0.0), Tier::Accurate);
-        let bits = |c: Complex64| (c.re.to_bits(), c.im.to_bits());
-        assert!(w.re.is_finite() && w.im.is_finite() && dw.re.is_finite() && dw.im.is_finite());
-        assert_eq!(bits(wn), bits(w), "w at x = {x}");
-        assert_eq!(bits(dwn), bits(dw), "w′ at x = {x}");
+    for tier in [Tier::Fast, Tier::Accurate] {
+        for x in [0.5, 30.0, 100.0, 2000.0] {
+            let (w, dw) = faddeeva::w(Complex64::new(x, 0.0), tier);
+            let (wn, dwn) = faddeeva::w(Complex64::new(x, -0.0), tier);
+            let bits = |c: Complex64| (c.re.to_bits(), c.im.to_bits());
+            assert!(w.re.is_finite() && w.im.is_finite() && dw.re.is_finite() && dw.im.is_finite());
+            assert_eq!(bits(wn), bits(w), "w at x = {x}, {tier:?}");
+            assert_eq!(bits(dwn), bits(dw), "w′ at x = {x}, {tier:?}");
+        }
     }
 }
 
 #[test]
 fn kernel_is_the_triplet_of_w() {
-    for (x, y) in [(0.0, 0.0), (1.5, 0.25), (-9.0, 1e-3), (300.0, 4.0)] {
-        let (w, dw) = faddeeva::w(Complex64::new(x, y), Tier::Accurate);
-        assert_eq!(
-            faddeeva::kernel(x, y, Tier::Accurate),
-            Kernel {
-                k: w.re,
-                k_x: dw.re,
-                k_y: -dw.im
-            }
-        );
+    for tier in [Tier::Fast, Tier::Accurate] {
+        for (x, y) in [(0.0, 0.0), (1.5, 0.25), (-9.0, 1e-3), (300.0, 4.0)] {
+            let (w, dw) = faddeeva::w(Complex64::new(x, y), tier);
+            assert_eq!(
+                faddeeva::kernel(x, y, tier),
+                Kernel {
+                    k: w.re,
+                    k_x: dw.re,
+                    k_y: -dw.im
+                }
+            );
+        }
     }
 }
 
 #[test]
 fn kernel_into_matches_kernel_bitwise() {
     let x: Vec<f64> = (-400..=400).map(|i| f64::from(i) * 0.137).collect();
-    for y in [0.0, 1e-3, 0.5, 30.0] {
-        let n = x.len();
-        let (mut k, mut kx, mut ky) = (vec![0.0; n], vec![0.0; n], vec![0.0; n]);
-        faddeeva::kernel_into(&x, y, Tier::Accurate, &mut k, &mut kx, &mut ky).unwrap();
-        for i in 0..n {
-            let one = faddeeva::kernel(x[i], y, Tier::Accurate);
-            assert_eq!(
-                (k[i], kx[i], ky[i]),
-                (one.k, one.k_x, one.k_y),
-                "x = {}, y = {y}",
-                x[i]
-            );
+    for tier in [Tier::Fast, Tier::Accurate] {
+        for y in [0.0, 1e-3, 0.5, 30.0] {
+            let n = x.len();
+            let (mut k, mut kx, mut ky) = (vec![0.0; n], vec![0.0; n], vec![0.0; n]);
+            faddeeva::kernel_into(&x, y, tier, &mut k, &mut kx, &mut ky).unwrap();
+            for i in 0..n {
+                let one = faddeeva::kernel(x[i], y, tier);
+                assert_eq!(
+                    (k[i], kx[i], ky[i]),
+                    (one.k, one.k_x, one.k_y),
+                    "x = {}, y = {y}, {tier:?}",
+                    x[i]
+                );
+            }
         }
     }
 }
