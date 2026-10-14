@@ -1,9 +1,9 @@
 # The Faddeeva function and the Voigt kernel
 
 Every Voigt line shape is K(x, y) = Re w(x + iy), the real part of the Faddeeva function
-w(z) = exp(−z²) erfc(−iz), at x = (ν − ν₀′)/σ_D and y = γ_L/σ_D ≥ 0 (spec §5–6). The Jacobians
-need its partial derivatives: K_x = Re w′ and K_y = −Im w′, since w is analytic. absrbrs computes
-the triplet (K, K_x, K_y) at two accuracy tiers, chosen per calculation.
+w(z) = exp(−z²) erfc(−iz), at x = (ν − ν₀′)/σ_D and y = γ_L/σ_D ≥ 0 in the line-shape model.
+The Jacobians need its partial derivatives: K_x = Re w′ and K_y = −Im w′, since w is analytic.
+absrbrs computes the triplet (K, K_x, K_y) at two accuracy tiers, chosen per calculation.
 
 | Tier | Value error (relative to K) | Derivative error (relative to \|w′\|) |
 |---|---|---|
@@ -27,8 +27,8 @@ w′ = −2zw + 2i/√π loses about |z|² in relative accuracy:
 | \|z\| ≥ 6 otherwise | derivative of the continued fraction of depth 20 |
 
 So for |z| ≥ 6 the value (Johnson's) and the derivative come from different formulas, a
-deliberate exception to spec §6.1's "same formula": both are accurate to about 1e-13, so they
-are consistent to that level.
+deliberate exception to spec §6.1's "same formula": the value is accurate to about 1e-13 and
+the derivative to a few 1e-13 for |z| ≥ 6, so they are consistent to that level.
 
 ## Fast tier
 

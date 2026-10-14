@@ -23,6 +23,13 @@ repos:
         language: system
         types_or: [python, pyi, markdown]
         require_serial: true
+      # validation/uv.lock embeds the root pyproject.toml's requires-dist.
+      - id: validation-lock
+        name: validation/uv.lock is current
+        entry: uv lock --check --directory validation
+        language: system
+        files: ^pyproject\.toml$
+        pass_filenames: false
       - id: cargo-fmt
         name: cargo fmt
         entry: cargo fmt --all -- --check

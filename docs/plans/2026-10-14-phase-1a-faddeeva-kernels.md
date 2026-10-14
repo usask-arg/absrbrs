@@ -2222,9 +2222,9 @@ Co-Authored-By: <your model> <noreply@anthropic.com>"
 
 ## Phase 1a exit checklist (spec §13)
 
-- [ ] Faddeeva kernels at both tiers, with derivatives: Tasks 1–3.
-- [ ] Accuracy checked in CI against the committed Arb grid (Rust) and against dense Arb maps computed at run time (`validation`): Tasks 2, 3, 6.
-- [ ] Faddeeva Package licence conditions met: notice in every ported file, `absrbrs/LICENSES/Faddeeva-MIT.txt` in `license-files`. Task 1.
-- [ ] Python access through `absrbrs.special`: Task 5.
-- [ ] Benchmarks against the J-pole recorded: Task 4.
-- [ ] Docs: theory, accuracy, API. `docs/plans/phase-1a-followups.md` holds the decisions and the items for phase 1c.
+- [x] Faddeeva kernels at both tiers, with derivatives: Tasks 1–3.
+- [x] Accuracy checked in CI against the committed Arb grid (Rust) and against dense Arb maps computed at run time (`validation`): Tasks 2, 3, 6.
+- [x] Faddeeva Package licence conditions met: notice in every ported file, `absrbrs/LICENSES/Faddeeva-MIT.txt` in `license-files`. Task 1.
+- [x] Python access through `absrbrs.special`: Task 5.
+- [x] Benchmarks against the J-pole recorded: Task 4.
+- [x] Docs: theory, accuracy, API. `docs/plans/phase-1a-followups.md` holds the decisions and the items for phase 1c.

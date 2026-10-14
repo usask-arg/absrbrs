@@ -68,8 +68,11 @@ saves the `hypot` only where r is not used.
 
 | Tier | Points | Max value error | Target | Max derivative error | Target |
 |---|---|---|---|---|---|
-| fast | 343220 | 4.9e-07 | 1e-06 | 1.8e-06 | 1e-05 |
-| accurate | 343220 | 9.6e-14 | 2e-13 | 8.8e-13 | 2e-12 |
+| fast | 347825 | 4.9e-07 | 1e-06 | 1.8e-06 | 1e-05 |
+| accurate | 347825 | 9.6e-14 | 2e-13 | 8.8e-13 | 2e-12 |
+
+The grid includes Johnson's own branch thresholds (|x| = 10, 28, 4000, 1e7; y = 1e-10, 5, 7) and
+the double on the other side of each.
 
 ## Decisions
 
@@ -96,6 +99,29 @@ saves the `hypot` only where r is not used.
   them. Decide on that optimisation with the line benchmarks above.
 - The Fast tier's margins are tightest at the depth-0 edge (|z| = 1750). If a future change to
   the depth-0 form costs accuracy, move the edge to 1800 (Lorentzian error ≈ 1.5/|z|²).
+
+- Accurate tier cost (spec §10.2 sets "Accurate tier ≤ 4 × Fast tier"): measured 16 to 21 times on
+  the line windows (75 to 92 against 4.4 to 4.9 ns per point). Likely cause: for |z| ≥ 6 the
+  derivative always runs a continued fraction of depth 16 or 20 (about 20 complex inversions),
+  even where Johnson's value needs ν ≤ 2. Option: choose the derivative's depth by |z| for 1e-13,
+  as the Fast tier does for 1e-6, re-validate, and either meet the target or record a spec change.
+- Accuracy maps: spec §8.2 and §12 call for published accuracy maps, but the accuracy page has
+  overall maxima only. Add per-region maxima (binning by the Fast region classifier) or a heatmap
+  in phase 1d.
+
+## For phase 1b
+
+The open items of the "Review notes" in `docs/plans/phase-0-followups.md`: I/O errors carrying the
+errno and file name, the uv cache keys (including `rust-toolchain.toml` and the embedded data),
+and the TIPS notice file and the safe `.QTpy` conversion, under the Licence gates.
+
+## Phase 0 items for phase 1a: outcome
+
+- Taylor order 4 (a near-tie with order 3 in phase 0): order 3 kept.
+- The `scipy.special.wofz` cross-check: superseded by the validation against Arb; not done.
+- Real-arithmetic forms of the continued fractions: implemented for depths 0 and 1 only; depths 2
+  to 5 use complex arithmetic.
+- Dawson accuracy: taken from the Accurate port's `w_im`, at most 4.3e-15.
 
 ## Before the first release
 

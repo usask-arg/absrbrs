@@ -1,5 +1,6 @@
-"""Both Faddeeva tiers against Arb: a dense grid (with every Fast-tier boundary and the double
-on its other side) and random points, computed at run time (spec §6.2 metrics)."""
+"""Both Faddeeva tiers against Arb: a dense grid (with every Fast-tier boundary and Johnson's
+branch thresholds, and the double on the other side of each) and random points, computed at run
+time (spec §6.2 metrics)."""
 
 from __future__ import annotations
 
@@ -11,6 +12,9 @@ from absrbrs import special
 TARGETS = {"fast": (1e-6, 1e-5), "accurate": (2e-13, 2e-12)}
 X_EDGES = np.array([6.0, 8.0, 9.0, 15.0, 27.0, 50.0, 1750.0])
 Y_EDGES = np.array([0.01, 0.1])
+# Johnson's internal branch thresholds (Accurate tier): |x| = 10, 28, 4000 and 1e7; y = 1e-10, 5, 7.
+JOHNSON_X = np.array([10.0, 28.0, 4000.0, 1e7])
+JOHNSON_Y = np.array([1e-10, 5.0, 7.0])
 RANDOM_POINTS = 200_000
 SEED = 20261015
 
@@ -24,12 +28,21 @@ def points() -> NDArray[np.complex128]:
                 10.0 ** (np.arange(-128, 129) / 16),
                 X_EDGES,
                 np.nextafter(X_EDGES, -np.inf),
+                JOHNSON_X,
+                np.nextafter(JOHNSON_X, -np.inf),
             ]
         )
     )
     ys = np.unique(
         np.concatenate(
-            [[0.0], 10.0 ** (np.arange(-180, 37) / 6), Y_EDGES, np.nextafter(Y_EDGES, np.inf)]
+            [
+                [0.0],
+                10.0 ** (np.arange(-180, 37) / 6),
+                Y_EDGES,
+                np.nextafter(Y_EDGES, np.inf),
+                JOHNSON_Y,
+                np.nextafter(JOHNSON_Y, np.inf),
+            ]
         )
     )
     gx, gy = np.meshgrid(xs, ys)

@@ -12,4 +12,3 @@
 *.egg-info/
 .DS_Store
 /prototypes/faddeeva/.cache/
-/validation/.cache/

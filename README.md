@@ -9,7 +9,8 @@ kernels have bounded, validated accuracy. absrbrs will consolidate the absorptio
 [sasktran2](https://github.com/usask-arg/sasktran2), which will depend on it.
 
 **Status:** pre-alpha. Phase 1a (Faddeeva kernels) is complete and phase 1b (line data,
-partition functions and the line-state layer) is next; there is still no usable cross-section API. See the
+partition functions and the line-state layer) is next; there is still no usable cross-section
+API. See the
 [design specification](https://github.com/usask-arg/absrbrs/blob/main/docs/specs/2026-10-14-absrbrs-design.md)
 and [CONTRIBUTING.md](https://github.com/usask-arg/absrbrs/blob/main/CONTRIBUTING.md).
 

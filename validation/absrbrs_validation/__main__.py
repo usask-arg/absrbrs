@@ -4,12 +4,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
 from absrbrs_validation import arb, faddeeva
 
 DOCS = Path(__file__).resolve().parents[2] / "docs" / "validation"
+
+
+def _finite_or_none(value: float) -> float | None:
+    """JSON has no inf or nan: a non-finite error is written as ``null``."""
+    return value if math.isfinite(value) else None
+
+
+def _json_safe(results: list[dict]) -> list[dict]:
+    return [
+        {k: _finite_or_none(v) if isinstance(v, float) else v for k, v in r.items()}
+        for r in results
+    ]
 
 
 def table(results: list[dict]) -> str:
@@ -33,12 +46,13 @@ def main(argv: list[str] | None = None) -> int:
     z = faddeeva.points()
     w, dw = arb.compute(z)
     results = [faddeeva.measure(z, w, dw, tier) for tier in ("fast", "accurate")]
-    (DOCS / "data").mkdir(parents=True, exist_ok=True)
-    (DOCS / "data" / "faddeeva-accuracy.json").write_text(
-        json.dumps(results, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
-    )
-    (DOCS / "faddeeva-accuracy-table.md").write_text(table(results), encoding="utf-8")
     print(table(results), file=sys.stderr)
+    (DOCS / "data").mkdir(parents=True, exist_ok=True)
+    (DOCS / "faddeeva-accuracy-table.md").write_text(table(results), encoding="utf-8")
+    (DOCS / "data" / "faddeeva-accuracy.json").write_text(
+        json.dumps(_json_safe(results), indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
     ok = all(
         r["max_value_error"] <= r["value_target"]
         and r["max_derivative_error"] <= r["derivative_target"]

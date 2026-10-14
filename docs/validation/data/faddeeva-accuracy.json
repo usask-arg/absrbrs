@@ -9,10 +9,10 @@
       6.812920690579608e-05
     ],
     "derivative_target": 1e-05,
-    "exempt": 5238,
+    "exempt": 5243,
     "max_derivative_error": 1.7905910418102135e-06,
     "max_value_error": 4.897960784951902e-07,
-    "points": 343220,
+    "points": 347825,
     "tier": "fast",
     "value_target": 1e-06
   },
@@ -26,10 +26,10 @@
       0.10000000000000002
     ],
     "derivative_target": 2e-12,
-    "exempt": 5238,
+    "exempt": 5243,
     "max_derivative_error": 8.821011155482334e-13,
     "max_value_error": 9.614515050289672e-14,
-    "points": 343220,
+    "points": 347825,
     "tier": "accurate",
     "value_target": 2e-13
   }

@@ -82,6 +82,10 @@ only to releases at least a week old.
 
 ## Reference data
 
+After changing dependencies in the root `pyproject.toml`, run `uv lock --directory validation`
+and commit `validation/uv.lock`: that lock embeds absrbrs's `requires-dist`, so CI's validation
+job fails until it is regenerated. The `validation-lock` pre-commit hook checks it.
+
 Arb reference values live in `reference/data/` and are produced by `reference/` (python-flint,
 pinned). Regenerate them with
 `uv run --directory reference python -m absrbrs_reference generate [--only NAME]`
