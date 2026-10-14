@@ -454,7 +454,9 @@ xs.to_xarray()       # requires the optional xarray extra
 - **Exceptions:**
   - `AbsrbrsError` is the base class;
   - `InvalidInputError` subclasses both `AbsrbrsError` and `ValueError`;
-  - `ParseError`, `MissingPartitionFunctionError` and `OutsideTableError` subclass `AbsrbrsError`.
+  - `ParseError` and `OutsideTableError` subclass both `AbsrbrsError` and `ValueError`;
+  - `MissingPartitionFunctionError` subclasses both `AbsrbrsError` and `LookupError`;
+  - a file that cannot be read raises the built-in `FileNotFoundError`, `PermissionError` or `OSError`, chosen by the `std::io::ErrorKind` of `Error::Io`.
 - The extension has hand-written `.pyi` stubs and ships `py.typed`. CI checks them with `mypy.stubtest`.
 
 ### 9.3 Packaging
