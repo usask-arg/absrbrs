@@ -1588,6 +1588,7 @@ mkdir -p absrbrs/tests/common
 git -C ~/dev/scat-rs show 4793160:scatrs/tests/common/mod.rs \
   | sed 's/scatrs/absrbrs/g' \
   | grep -v '^pub mod \(check\|greek\|mie\);$' > absrbrs/tests/common/mod.rs
+cargo fmt --all   # collapses the double blank line left where the three module lines were
 grep -c "" absrbrs/tests/common/mod.rs
 ```
 
