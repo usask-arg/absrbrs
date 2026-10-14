@@ -122,11 +122,18 @@ Outcomes of the phase 0 licence checks (Task 6). The details and sources are in
   - Generate the tables with a script, recording for each file used Zenodo's published MD5
     and a locally computed SHA-256.
 
-  Build from the plain-text tables in `TIPS_2021.zip` (`BD_TIPS_2021.FOR`, in the same MIT
-  record); prefer this. The `.QTpy` files are third-party Python pickles, and a matching hash
-  does not make unpickling them safe. If they must be used, inspect them first with
-  `pickletools`. Then load them with a restricted `pickle.Unpickler` whose `find_class` refuses
-  all globals, or allows only the exact expected types. Never unpickle anything at runtime.
+  Primary source: the `.QTpy` files. They carry 6–8 significant figures (H2O isotopologue 1:
+  `'1.32837'` at 10 K, `'174.58130'` at 296 K), and HAPI's embedded tables carry about 7. The
+  Fortran DATA tables in `TIPS_2021.zip` (`BD_TIPS_2021.FOR`) carry only 5 (`1.3284E+00`).
+  Building from the Fortran would add up to about 5e-5 relative rounding error, and could not
+  meet spec §5.5's "equal HAPI's partitionSum exactly at nodes".
+
+  The `.QTpy` files are third-party Python pickles, and a matching hash does not make
+  unpickling them safe. Inspect each one with `pickletools` first. `1_1.QTpy` is a plain dict
+  of str to str values, with no `GLOBAL` or `REDUCE` opcodes. Then load it, offline, with a
+  restricted `pickle.Unpickler` whose `find_class` refuses all globals. Never unpickle anything
+  at runtime. Use the Fortran tables as an independent cross-check: the two must agree to the
+  Fortran's 5 significant figures.
 - **TIPS grids and HAPI version (phase 1b).** HAPI 1.3.0.0's `partitionSum` defaults to
   `version=2025` (TIPS-2025). Its embedded TIPS-2021 grid is 1, 10, 20, … K, whereas the Zenodo
   tables use 1 K steps up to 20 K and 2 K steps above. Spec §5.5's "tabulated at 1 K steps" and
