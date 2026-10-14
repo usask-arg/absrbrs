@@ -1,0 +1,376 @@
+{
+  "baselines": {
+    "Weideman 32": {
+      "expected_cost": 568.0,
+      "holdout": [
+        5.725218094338256e+292,
+        9.827442438034455e-12
+      ],
+      "max_derivative_error": 9.825985197998442e-12,
+      "max_value_error": 1.3254113179903198e+290,
+      "regions": [
+        {
+          "max_derivative_error": 9.825985197998442e-12,
+          "max_value_error": 1.3254113179903198e+290,
+          "method": [
+            "weideman",
+            32
+          ],
+          "name": "all",
+          "occupancy": 1.0,
+          "r_max": Infinity,
+          "r_min": 0.0,
+          "s_min": 0.0,
+          "x_max": Infinity,
+          "x_min": 0.0,
+          "y_max": Infinity
+        }
+      ]
+    },
+    "Weideman 40": {
+      "expected_cost": 696.0,
+      "holdout": [
+        1.1371126603813762e+290,
+        1.4033472547567196e-14
+      ],
+      "max_derivative_error": 1.3875555997012584e-14,
+      "max_value_error": 2.503925663709672e+287,
+      "regions": [
+        {
+          "max_derivative_error": 1.3875555997012584e-14,
+          "max_value_error": 2.503925663709672e+287,
+          "method": [
+            "weideman",
+            40
+          ],
+          "name": "all",
+          "occupancy": 1.0,
+          "r_max": Infinity,
+          "r_min": 0.0,
+          "s_min": 0.0,
+          "x_max": Infinity,
+          "x_min": 0.0,
+          "y_max": Infinity
+        }
+      ]
+    },
+    "hum1wei24 (HAPI)": {
+      "expected_cost": 66.05526114055262,
+      "holdout": [
+        2.417405412047113e+86,
+        0.00019300035535497535
+      ],
+      "max_derivative_error": 0.00017075478147235212,
+      "max_value_error": 2.5888545715075916e+86,
+      "regions": [
+        {
+          "max_derivative_error": 0.00017075478147235212,
+          "max_value_error": 1.0,
+          "method": [
+            "cf",
+            1
+          ],
+          "name": "Humlicek I",
+          "occupancy": 0.9945338799453388,
+          "r_max": Infinity,
+          "r_min": 0.0,
+          "s_min": 15.0,
+          "x_max": Infinity,
+          "x_min": 0.0,
+          "y_max": Infinity
+        },
+        {
+          "max_derivative_error": 1.0162225693243467e-08,
+          "max_value_error": 2.5888545715075916e+86,
+          "method": [
+            "weideman",
+            24
+          ],
+          "name": "Weideman 24",
+          "occupancy": 0.005466120054661201,
+          "r_max": Infinity,
+          "r_min": 0.0,
+          "s_min": 0.0,
+          "x_max": Infinity,
+          "x_min": 0.0,
+          "y_max": Infinity
+        }
+      ]
+    },
+    "jpole8 (sasktran2)": {
+      "expected_cost": 240.0,
+      "holdout": [
+        3.871140077963904e+297,
+        3.345427934180907e-06
+      ],
+      "max_derivative_error": 3.3447442224003082e-06,
+      "max_value_error": 8.407902292457076e+294,
+      "regions": [
+        {
+          "max_derivative_error": 3.3447442224003082e-06,
+          "max_value_error": 8.407902292457076e+294,
+          "method": [
+            "jpole8",
+            0
+          ],
+          "name": "all",
+          "occupancy": 1.0,
+          "r_max": Infinity,
+          "r_min": 0.0,
+          "s_min": 0.0,
+          "x_max": Infinity,
+          "x_min": 0.0,
+          "y_max": Infinity
+        }
+      ]
+    }
+  },
+  "evaluation_points": {
+    "committed": 9176,
+    "dense": 147626,
+    "holdout": 400000
+  },
+  "rejected_on_holdout": 0,
+  "selected": {
+    "expected_cost": 60.837249608372495,
+    "holdout": [
+      4.751327653904498e-07,
+      1.7883620293008184e-06
+    ],
+    "max_derivative_error": 1.7905910418102135e-06,
+    "max_value_error": 4.7534903798502433e-07,
+    "regions": [
+      {
+        "max_derivative_error": 1.4059843809978533e-07,
+        "max_value_error": 1.405984380042337e-07,
+        "method": [
+          "gauss_cf",
+          5
+        ],
+        "name": "exp + CF",
+        "occupancy": 0.0028330500283305004,
+        "r_max": Infinity,
+        "r_min": 0.0,
+        "s_min": 0.0,
+        "x_max": 27.0,
+        "x_min": 6.0,
+        "y_max": 0.01
+      },
+      {
+        "max_derivative_error": 5.076939906909414e-08,
+        "max_value_error": 5.077399854552582e-08,
+        "method": [
+          "cf",
+          4
+        ],
+        "name": "CF |z| in [8, 10)",
+        "occupancy": 0.0004999500049995,
+        "r_max": 10.0,
+        "r_min": 8.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 1.5176156569490153e-07,
+        "max_value_error": 1.5176745228602427e-07,
+        "method": [
+          "cf",
+          3
+        ],
+        "name": "CF |z| in [10, 12)",
+        "occupancy": 0.0004999500049995,
+        "r_max": 12.0,
+        "r_min": 10.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 3.4026642012559456e-08,
+        "max_value_error": 3.402754231386721e-08,
+        "method": [
+          "cf",
+          3
+        ],
+        "name": "CF |z| in [12, 15)",
+        "occupancy": 0.00114988501149885,
+        "r_max": 15.0,
+        "r_min": 12.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 4.753438661762316e-07,
+        "max_value_error": 4.7534903798502433e-07,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [15, 20)",
+        "occupancy": 0.0015331800153318002,
+        "r_max": 20.0,
+        "r_min": 15.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 8.345894820311985e-08,
+        "max_value_error": 8.34594547196468e-08,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [20, 30)",
+        "occupancy": 0.0032996700329967,
+        "r_max": 30.0,
+        "r_min": 20.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 7.256897197944611e-09,
+        "max_value_error": 7.2568971537711755e-09,
+        "method": [
+          "cf",
+          2
+        ],
+        "name": "CF |z| in [30, 50)",
+        "occupancy": 0.0084991500849915,
+        "r_max": 50.0,
+        "r_min": 30.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 4.0054493350941447e-07,
+        "max_value_error": 4.005449336241954e-07,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [50, 100)",
+        "occupancy": 0.0210645602106456,
+        "r_max": 100.0,
+        "r_min": 50.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 2.5008503881585998e-08,
+        "max_value_error": 2.5008503989772246e-08,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [100, 300)",
+        "occupancy": 0.0842582408425824,
+        "r_max": 300.0,
+        "r_min": 100.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 3.0865394051777933e-10,
+        "max_value_error": 3.086540421643157e-10,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [300, 1000)",
+        "occupancy": 0.294637202946372,
+        "r_max": 1000.0,
+        "r_min": 300.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 2.5002771769244013e-12,
+        "max_value_error": 2.5003138347250305e-12,
+        "method": [
+          "cf",
+          1
+        ],
+        "name": "CF |z| in [1000, 3000)",
+        "occupancy": 0.44638869446388696,
+        "r_max": 3000.0,
+        "r_min": 1000.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 1.6666668532353081e-07,
+        "max_value_error": 1.6666668548520325e-07,
+        "method": [
+          "cf",
+          0
+        ],
+        "name": "CF |z| in [3000, inf)",
+        "occupancy": 0.1326867313268673,
+        "r_max": Infinity,
+        "r_min": 3000.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      },
+      {
+        "max_derivative_error": 1.7905910418102135e-06,
+        "max_value_error": 8.692989927801539e-08,
+        "method": [
+          "taylor",
+          3
+        ],
+        "name": "Taylor",
+        "occupancy": 0.0007665900076659001,
+        "r_max": Infinity,
+        "r_min": 0.0,
+        "s_min": 0.0,
+        "x_max": 6.0,
+        "x_min": 0.0,
+        "y_max": 0.01
+      },
+      {
+        "max_derivative_error": 9.621183617984412e-09,
+        "max_value_error": 2.371987773647723e-07,
+        "method": [
+          "weideman",
+          24
+        ],
+        "name": "weideman 24",
+        "occupancy": 0.0018831450188314502,
+        "r_max": Infinity,
+        "r_min": 0.0,
+        "s_min": 0.0,
+        "x_max": Infinity,
+        "x_min": 0.0,
+        "y_max": Infinity
+      }
+    ]
+  },
+  "targets": {
+    "derivative": 1e-05,
+    "margin": 0.5,
+    "value": 1e-06
+  },
+  "valid_composites": 240,
+  "workload_points": 60006
+}
