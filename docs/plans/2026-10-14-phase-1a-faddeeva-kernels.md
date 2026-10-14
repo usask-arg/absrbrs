@@ -317,7 +317,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 Expected:
-- `6 passed` for the filter `faddeeva`. The printed worst errors should be around 1e-16 to 1e-15.
+- `6 passed` for the filter `faddeeva`. The printed worst errors are below 1e-14; measured: erfcx 7.8e-16, w_im 4.3e-15 (the accuracy of Johnson's tables; the port matches the C code bit for bit).
 - clippy and fmt clean.
 
 If an error exceeds 1e-14, compare the failing range's code with the C source line by line. Do not loosen the tolerance.
@@ -699,10 +699,14 @@ Expected:
 
 If the value error exceeds 2e-13, the port differs from the source. Compare the region it occurs in, line by line, with the C code. Do not loosen the tolerance.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: List the ported files in the licence register**
+
+In `THIRD_PARTY.md`, Faddeeva Package row, add to the Obligations cell: "Ported files: `absrbrs/src/faddeeva/accurate/{erfcx,w_im,w}.rs` (each with the notice in its header); notice file `absrbrs/LICENSES/Faddeeva-MIT.txt`, listed in `pyproject.toml` `license-files`."
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add absrbrs/src absrbrs/tests/faddeeva_accuracy.rs
+git add absrbrs/src absrbrs/tests/faddeeva_accuracy.rs THIRD_PARTY.md
 git commit -m "feat(faddeeva): Accurate tier w(z) with derivative; public API (w, kernel, kernel_into)
 
 Co-Authored-By: <your model> <noreply@anthropic.com>"
