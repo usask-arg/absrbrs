@@ -4,8 +4,9 @@ Molecular absorption cross sections with first-class linearization, written in R
 Python interface.
 
 ```{note}
-absrbrs is in early development: phase 0 (foundations) is complete and phase 1a (Faddeeva
-kernels) is next, so there is still no cross-section API. It is not published on PyPI or crates.io; see {doc}`installation` to build it.
+absrbrs is in early development: phase 1a (the Faddeeva kernels and `absrbrs.special`) is
+complete, and there is still no cross-section API. It is not published on PyPI or crates.io;
+see {doc}`installation` to build it.
 ```
 
 absrbrs will compute line-by-line absorption cross sections from spectroscopic line lists.
@@ -24,8 +25,16 @@ conventions
 
 ```{toctree}
 :maxdepth: 1
+:caption: Theory
+
+theory/faddeeva
+```
+
+```{toctree}
+:maxdepth: 1
 :caption: Validation
 
+validation/faddeeva-accuracy
 validation/faddeeva-prototype
 ```
 

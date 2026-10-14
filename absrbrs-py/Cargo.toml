@@ -20,6 +20,7 @@ doctest = false
 [dependencies]
 absrbrs = { path = "../absrbrs" }
 pyo3 = { version = "0.29", features = ["abi3-py311"] }
+numpy = "0.29"
 
 [build-dependencies]
 pyo3-build-config = "0.29"

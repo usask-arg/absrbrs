@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _version
 
-from absrbrs import _absrbrs
+from absrbrs import _absrbrs, special
 from absrbrs.errors import (
     AbsrbrsError,
     InvalidInputError,
@@ -19,6 +19,7 @@ __all__ = [
     "OutsideTableError",
     "ParseError",
     "__version__",
+    "special",
 ]
 
 # The distribution's version, in PEP 440 form: maturin derives it from the Cargo workspace

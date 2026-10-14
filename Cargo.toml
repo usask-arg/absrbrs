@@ -10,6 +10,7 @@ license = "MIT"
 repository = "https://github.com/usask-arg/absrbrs"
 
 [workspace.dependencies]
+num-complex = "0.4.6"
 thiserror = "2"
 
 [profile.release]

@@ -26,6 +26,7 @@ cargo build --workspace --lib
 RUSTDOCFLAGS="-D warnings" cargo doc -p absrbrs --no-deps --document-private-items
 cargo check --workspace --target s390x-unknown-linux-gnu   # rustup target add s390x-unknown-linux-gnu
 cargo test --workspace
+cargo test -p absrbrs --bench faddeeva   # runs each benchmark once; timing is not checked
 cargo +1.85.0 check --workspace --lib   # the MSRV: rustup toolchain install 1.85.0
 cargo package -p absrbrs                # add --allow-dirty while changes are uncommitted
 uv run ruff check .
@@ -35,9 +36,12 @@ uv run python -m mypy.stubtest absrbrs._absrbrs
 uv run --directory reference python -m pytest
 uv run --directory reference python -m absrbrs_reference generate   # then: git status reference/data
 uv run --directory prototypes/faddeeva python -m pytest
+uv run --directory validation python -m pytest   # both Faddeeva tiers against Arb, computed now
 uv run --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
 uvx --from actionlint-py==1.7.12.25 actionlint   # after changing .github/workflows
 ```
+
+Wall-clock benchmarks of the Faddeeva kernels: `cargo bench -p absrbrs --bench faddeeva`.
 
 CI also tests the packaged crate on its own, as `cargo test` on the crates.io sources would:
 extract `target/package/absrbrs-*.crate` outside the repository and run `cargo test --locked`
@@ -64,6 +68,8 @@ only to releases at least a week old.
   - the strict documentation build and the type stubs;
   - the reference generator's tests, a regeneration of every reference file, and the Faddeeva
     prototype's tests;
+  - the accuracy of both Faddeeva tiers against Arb values computed at run time
+    (`validation/`);
   - "All checks passed", which succeeds only if every job above did: the one check to
     require.
 - `.github/workflows/release.yml`, on pushes to `main`, tags `v*`, and pull requests that touch
@@ -75,6 +81,10 @@ only to releases at least a week old.
   the committed data.
 
 ## Reference data
+
+After changing dependencies in the root `pyproject.toml`, run `uv lock --directory validation`
+and commit `validation/uv.lock`: that lock embeds absrbrs's `requires-dist`, so CI's validation
+job fails until it is regenerated. The `validation-lock` pre-commit hook checks it.
 
 Arb reference values live in `reference/data/` and are produced by `reference/` (python-flint,
 pinned). Regenerate them with

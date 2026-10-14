@@ -7,6 +7,14 @@
       "python_flint": "0.9.0",
       "records": 74,
       "sha256": "cb14d4a72be80ea00db2796f28ab6854c2de617fe685d9257507ad59e2196316"
+    },
+    "weideman.jsonl": {
+      "flint": "3.6.0",
+      "generator": "weideman",
+      "precision_bits": 256,
+      "python_flint": "0.9.0",
+      "records": 1,
+      "sha256": "c3a075233c7d1681c5427c381a9baa920d084db33a9791421c7585a3b6aaf21e"
     }
   },
   "format_version": 2

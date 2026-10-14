@@ -16,3 +16,8 @@ All notable changes to absrbrs are recorded here. The format follows
 - Third-party licence register (`THIRD_PARTY.md`) with the outcome of each phase 0 licence check.
 - Contributor tooling: pre-commit hooks, dependabot configuration and `CONTRIBUTING.md`.
 - Documentation site, CI, release and scheduled workflows.
+- `absrbrs::faddeeva`: w(z) and its derivative, and the Voigt kernel triplet, at the Fast and
+  Accurate tiers (the Accurate tier ports the MIT-licensed Faddeeva Package).
+- `absrbrs.special.faddeeva` and `absrbrs.special.voigt_kernel`.
+- Validation of both tiers against Arb in CI; benchmarks against sasktran2's J-pole
+  approximation.

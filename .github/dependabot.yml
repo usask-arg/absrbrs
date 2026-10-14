@@ -57,3 +57,16 @@ updates:
     groups:
       prototype:
         patterns: ["*"]
+  # Arb accuracy validation of both Faddeeva tiers; python-flint is pinned exactly.
+  - package-ecosystem: uv
+    directory: "/validation"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    # python-flint is pinned exactly: a new version needs the accuracy re-checked.
+    ignore:
+      - dependency-name: python-flint
+    groups:
+      validation:
+        patterns: ["*"]
