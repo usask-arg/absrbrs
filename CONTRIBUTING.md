@@ -36,6 +36,7 @@ uv run python -m mypy.stubtest absrbrs._absrbrs
 uv run --directory reference python -m pytest
 uv run --directory reference python -m absrbrs_reference generate   # then: git status reference/data
 uv run --directory prototypes/faddeeva python -m pytest
+uv run --directory validation python -m pytest   # both Faddeeva tiers against Arb, computed now
 uv run --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
 uvx --from actionlint-py==1.7.12.25 actionlint   # after changing .github/workflows
 ```
@@ -67,6 +68,8 @@ only to releases at least a week old.
   - the strict documentation build and the type stubs;
   - the reference generator's tests, a regeneration of every reference file, and the Faddeeva
     prototype's tests;
+  - the accuracy of both Faddeeva tiers against Arb values computed at run time
+    (`validation/`);
   - "All checks passed", which succeeds only if every job above did: the one check to
     require.
 - `.github/workflows/release.yml`, on pushes to `main`, tags `v*`, and pull requests that touch

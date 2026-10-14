@@ -66,9 +66,9 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# First-party packages: absrbrs (python/), the reference generator (reference/) and the
-# Faddeeva prototype (prototypes/faddeeva/).
-src = ["python", "reference", "prototypes/faddeeva", "."]
+# First-party packages: absrbrs (python/), the reference generator (reference/), the
+# Faddeeva prototype (prototypes/faddeeva/) and the accuracy validation (validation/).
+src = ["python", "reference", "prototypes/faddeeva", "validation", "."]
 # The design records keep the plan's code blocks verbatim; ruff would reformat them.
 extend-exclude = ["docs/plans", "docs/specs"]
 

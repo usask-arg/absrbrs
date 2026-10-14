@@ -42,8 +42,9 @@ per window divided by 10 001.
 
 The J-pole baseline is the 8-pole sum in plain complex arithmetic. sasktran2's own derivative
 path precomputes per-line pole-pair coefficients and uses f64x8 SIMD under its nightly-only
-feature, which this baseline does not represent (a scalar pole-paired version measured 12.9 ns
-per point against 13.4 ns for this one), so the comparison is with scalar J-pole code.
+feature, which this baseline does not represent (an informal scratch measurement, not
+reproducible from the repository, put a scalar pole-paired version at 12.9 ns per point against
+13.4 ns for this one), so the comparison is with scalar J-pole code.
 
 All six line windows cost about the same on the Fast tier, 4.4 to 4.9 ns per point, because
 more than 95% of their points use the depth-0 and depth-1 real forms. By occupancy, o2_30km and
@@ -63,6 +64,23 @@ confirmed in phase 1c. A phase 1c option is to compare x² + y² against squared
 The Lorentzian reuses r, so a squared-edge classifier still needs r (or 1/r²) in that region, and
 saves the `hypot` only where r is not used.
 
+## Accuracy (validation/, Arb computed at run time)
+
+| Tier | Points | Max value error | Target | Max derivative error | Target |
+|---|---|---|---|---|---|
+| fast | 343220 | 4.9e-07 | 1e-06 | 1.8e-06 | 1e-05 |
+| accurate | 343220 | 9.6e-14 | 2e-13 | 8.8e-13 | 2e-12 |
+
+## Decisions
+
+- **Accurate-tier derivative (spec §6.1 exception).** For |z| ≥ 6 the derivative comes from an
+  asymptotic formula (exp(−z²) + continued fraction of depth 16 near the axis, continued fraction
+  of depth 20 elsewhere) while the value is Johnson's. Both are accurate to about 1e-13, so value
+  and derivative are consistent to that level; measured on 565k Arb points: value ≤ 9.7e-14,
+  derivative ≤ 9.3e-13 (tightest: the identity just inside |z| = 6).
+- **Johnson's large-x second loop** (`np = n0 + dn++`, then `exp(-sqr(a*dn+dx))`) has an index
+  mismatch in the source, ported as written: it is unreachable on the machine-precision path.
+
 ## For phase 1c
 
 - Weideman region speed. At (2, 0.5) the Fast tier takes 49 ns and the Accurate tier 36 ns.
@@ -73,6 +91,11 @@ saves the `hypot` only where r is not used.
   dependency chain; a smaller N, if the 1e-6 and 1e-5 error bounds still hold (re-validate);
   or routing |z| ≲ 5 to Accurate. Occupancy is 0 to 0.47% in these windows (at most about 5% of
   line time), but it matters for densely sampled broad lines.
+- `kernel_into` evaluates point by point. The profile layer evaluates one line's window, with
+  sorted x and one y, so it can find each region's x-range once and run branch-free loops over
+  them. Decide on that optimisation with the line benchmarks above.
+- The Fast tier's margins are tightest at the depth-0 edge (|z| = 1750). If a future change to
+  the depth-0 form costs accuracy, move the edge to 1800 (Lorentzian error ≈ 1.5/|z|²).
 
 ## Before the first release
 

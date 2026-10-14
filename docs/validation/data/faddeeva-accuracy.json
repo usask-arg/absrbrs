@@ -1,0 +1,36 @@
+[
+  {
+    "at_derivative": [
+      2.053525026457146e-06,
+      0.01
+    ],
+    "at_value": [
+      1749.9999999999998,
+      6.812920690579608e-05
+    ],
+    "derivative_target": 1e-05,
+    "exempt": 5238,
+    "max_derivative_error": 1.7905910418102135e-06,
+    "max_value_error": 4.897960784951902e-07,
+    "points": 343220,
+    "tier": "fast",
+    "value_target": 1e-06
+  },
+  {
+    "at_derivative": [
+      5.862903448441379,
+      0.0005841358972583036
+    ],
+    "at_value": [
+      6.03125,
+      0.10000000000000002
+    ],
+    "derivative_target": 2e-12,
+    "exempt": 5238,
+    "max_derivative_error": 8.821011155482334e-13,
+    "max_value_error": 9.614515050289672e-14,
+    "points": 343220,
+    "tier": "accurate",
+    "value_target": 2e-13
+  }
+]

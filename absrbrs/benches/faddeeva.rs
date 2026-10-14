@@ -52,8 +52,9 @@ const FRAC_1_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 /// The J-pole kernel triplet: the same 8-pole sum as sasktran2's, evaluated in plain complex
 /// arithmetic. The other four poles are −conj of these, with conj coefficients. sasktran2's own
 /// derivative path precomputes per-line pole-pair coefficients and uses f64x8 SIMD under its
-/// nightly-only feature, which this baseline does not represent (a scalar pole-paired version
-/// measured 12.9 ns per point against this one's 13.4 ns).
+/// nightly-only feature, which this baseline does not represent (an informal scratch measurement,
+/// not reproducible from the repository, put a scalar pole-paired version at 12.9 ns per point
+/// against this one's 13.4 ns).
 fn jpole_kernel(x: f64, y: f64) -> (f64, f64, f64) {
     let z = Complex64::new(x, y);
     let (mut s, mut ds) = (Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0));
