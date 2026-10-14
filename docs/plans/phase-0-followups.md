@@ -1,8 +1,11 @@
 # Phase 0 follow-ups and decisions
 
 Decisions taken in phase 0, and items deferred to later phases. This file is the most
-up-to-date record; the spec (`docs/specs/2026-10-14-absrbrs-design.md`) is not edited to
-match.
+up-to-date record. The spec (`docs/specs/2026-10-14-absrbrs-design.md`) is not edited to
+match, apart from the error-type amendments to §7.4 and §9.2; the note under its title block
+points here.
+
+Phase 0 is complete at the merge of branch `phase-0-foundations`.
 
 ## Fast-tier Faddeeva algorithm (spec §6.3) — decided
 
@@ -67,6 +70,10 @@ confirms spec Appendix A, item 2.
   in the prototype, D to 1e-8 relative gives 7e-7 (over the half-target), and D to 1e-9 gives
   8e-8. Use D to about 1e-9 relative or better: from the Accurate-tier port of the Faddeeva
   Package (its `w_im`), or compute 2x D(x) − 1 directly, without the cancellation.
+- In the Taylor region, test K_y as ∂K/∂y of the formula, not as −Im of the x-derivative. The
+  Taylor series uses w′(x) = −2xw + 2i/√π on the real axis, which amplifies relative error by
+  about 2x² ≤ 72 for |x| < 6; that is acceptable with D to 1e-9, and it is why spec §6.1's rule
+  against the identity does not apply there.
 - `scipy.special.wofz` is Johnson's Faddeeva Package. It is a convenient independent check
   of the Accurate-tier Rust port, in addition to the Arb data.
 - The dense map's and the holdout's inputs come from the platform's `10.0 **` and numpy's
@@ -95,14 +102,24 @@ Recorded from the phase 0 task reviews.
   README links before the first crates.io publish.
 - **Error variants.** Struct-variant fields are a semver commitment (enum-level
   `#[non_exhaustive]` does not cover them); acceptable at 0.0.x, revisit before 0.1.0.
+- **Wheel notices for linked Rust dependencies (before the first wheel release, phase 1d).**
+  Wheels statically link pyo3, pyo3-ffi, libc, once_cell and thiserror (MIT OR Apache-2.0).
+  Add a cargo-deny licence allowlist and a generated notices file listed in `license-files`,
+  and a row or paragraph in `THIRD_PARTY.md`.
+- **Scheduled jobs (phase 1).** Spec §12 lists ignored (slow) tests and cross-code comparisons
+  for `scheduled.yml`; add them when they exist.
+- **Public paths.** The plans and spec mention local checkouts (`~/dev/scat-rs`,
+  `~/dev/sasktran2`); refer to the GitHub repositories instead before publishing.
 
 ## Licence gates
 
 Outcomes of the phase 0 licence checks (Task 6). The details and sources are in
-`THIRD_PARTY.md`. Every row there awaits confirmation by a named maintainer.
+`THIRD_PARTY.md`. Every row there is pending maintainer confirmation. Phase 1a may not merge
+the Faddeeva Package port, and phase 1b may not commit the TIPS-2021 tables, until a maintainer
+has confirmed those rows (name and date) in `THIRD_PARTY.md`.
 
 - **Faddeeva Package (phase 1a): conditions.** It is MIT-licensed, so the Accurate-tier port
-  may proceed. The ported Rust file must carry the "Copyright (c) 2012 Massachusetts Institute
+  may proceed once a maintainer has confirmed the row. The ported Rust file must carry the "Copyright (c) 2012 Massachusetts Institute
   of Technology" notice and the MIT permission notice in its header. Wheels contain no Rust
   source, and `pyproject.toml` has `license-files = ["LICENSE"]`. So in the same commit as the
   port, add a notice file inside the crate package (e.g. `absrbrs/LICENSES/Faddeeva-MIT.txt`)
@@ -111,7 +128,8 @@ Outcomes of the phase 0 licence checks (Task 6). The details and sources are in
   (Poppe–Wijers).
 - **TIPS-2021 (phase 1b): conditions.** The Zenodo record (10.5281/zenodo.4708099) is
   MIT-licensed, the paper (section 4) says the codes all use the MIT licence, and HAPI already
-  redistributes the tables under MIT. The built-in tables may therefore be committed. The
+  redistributes the tables under MIT. The built-in tables may therefore be committed once a
+  maintainer has confirmed the row. The
   HAPI-based builder is not required; user-supplied tables remain in scope (spec §5.5).
   Obligations:
   - Ship the copyright notice (Robert Gamache, 2021) and the MIT permission notice with the

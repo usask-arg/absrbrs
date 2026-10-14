@@ -2,7 +2,7 @@
 //!
 //! The functions here take and return plain numpy arrays and Python numbers; argument
 //! conversion and the user-facing documentation live in the `absrbrs` Python package. Every
-//! function releases the GIL while it computes.
+//! computing function releases the GIL while it computes.
 
 use pyo3::prelude::*;
 

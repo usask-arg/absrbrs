@@ -71,7 +71,7 @@ docs/validation/faddeeva-prototype.md                                           
 .pre-commit-config.yaml  CONTRIBUTING.md                                          Task 8
 ```
 
-Every command runs from the repository root, `/Users/djz828/dev/absrbrs`, unless a step says otherwise. The repository already exists: `git init -b main` has been run, and it has one commit, the spec.
+Every command runs from the repository root unless a step says otherwise. The repository already exists: `git init -b main` has been run, and it has one commit, the spec.
 
 ---
 
@@ -3844,12 +3844,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Phase 0 exit checklist (spec §13)
 
-- [ ] Repository with the scatrs layout and tooling: Tasks 1, 2 and 8.
-- [ ] CI configured: `all-checks` gates lint, Rust tests on 3 operating systems, MSRV, Python wheels, docs and stubs, and the reference and prototype jobs (Task 8). It is not run on GitHub until a remote exists.
-- [ ] Python package skeleton with the exception hierarchy and stubs: Task 2.
-- [ ] Reference-generator scaffolding and the Faddeeva Arb data, with the Rust loader: Task 3.
-- [ ] Python Faddeeva prototype, Arb accuracy maps, and the Fast-tier algorithm chosen and recorded: Tasks 4 and 5.
-- [ ] Licence checks for TIPS-2021, HAPI, HITRAN snippets and the Faddeeva Package recorded, with each gate's outcome: Task 6.
-- [ ] Documentation site building strictly: Task 7.
-- [ ] `docs/plans/phase-0-followups.md` lists the decisions and the phase 1a items.
-- [ ] Nothing pushed; no remote created.
+- [x] Repository with the scatrs layout and tooling: Tasks 1, 2 and 8.
+- [x] CI configured: `all-checks` gates lint, Rust tests on 3 operating systems, MSRV, Python wheels, docs and stubs, and the reference and prototype jobs (Task 8). It is not run on GitHub until a remote exists.
+- [x] Python package skeleton with the exception hierarchy and stubs: Task 2.
+- [x] Reference-generator scaffolding and the Faddeeva Arb data, with the Rust loader: Task 3.
+- [x] Python Faddeeva prototype, Arb accuracy maps, and the Fast-tier algorithm chosen and recorded: Tasks 4 and 5.
+- [x] Licence checks for TIPS-2021, HAPI, HITRAN snippets and the Faddeeva Package recorded, with each gate's outcome: Task 6.
+- [x] Documentation site building strictly: Task 7.
+- [x] `docs/plans/phase-0-followups.md` lists the decisions and the phase 1a items.
+- [x] Nothing pushed; no remote created.

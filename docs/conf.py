@@ -3,7 +3,7 @@
 autodoc imports absrbrs and the examples run it. ``uv run`` installs it, rebuilding the extension
 whenever the Rust sources have changed::
 
-    uv run --extra docs sphinx-build -W --keep-going -b html docs docs/_build/html
+    uv run --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
 
 Intersphinx downloads the Python and numpy inventories. Without network access that download
 fails with a warning, which ``-W`` makes fatal: set ``ABSRBRS_DOCS_OFFLINE=1`` to skip it.
