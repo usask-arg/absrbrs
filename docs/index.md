@@ -8,28 +8,29 @@ absrbrs is in early development (phase 0, foundations) and has no cross-section 
 not published on PyPI or crates.io; see {doc}`installation` to build it.
 ```
 
-absrbrs computes line-by-line absorption cross sections from spectroscopic line lists. Every
-cross section comes with its Jacobian: with respect to temperature, pressure and volume mixing
-ratio, and on request with respect to the line parameters. The line-shape kernels have
-bounded accuracy, validated against arbitrary-precision references.
+absrbrs will compute line-by-line absorption cross sections from spectroscopic line lists.
+Every cross section is designed to come with its Jacobian: with respect to temperature,
+pressure and volume mixing ratio, and on request with respect to the line parameters. The
+line-shape kernels are designed to have bounded accuracy, validated against
+arbitrary-precision references.
 
 ```{toctree}
-:maxdepth: 2
-:caption: Getting started
+:maxdepth: 1
+:caption: User guide
 
 installation
 conventions
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :caption: Validation
 
 validation/faddeeva-prototype
 ```
 
 ```{toctree}
-:maxdepth: 2
+:maxdepth: 1
 :caption: Reference
 
 api

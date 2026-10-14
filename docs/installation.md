@@ -1,7 +1,7 @@
 # Installation
 
 absrbrs is not yet published. To build it from a clone of the repository you need a stable
-Rust toolchain (1.85 or later) and [uv](https://docs.astral.sh/uv/):
+Rust toolchain (1.85 or later), Python 3.11 or later, and [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync          # builds the extension and installs absrbrs into .venv
