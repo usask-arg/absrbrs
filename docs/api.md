@@ -16,7 +16,25 @@ once the crate is published. Both follow the {doc}`conventions`.
    pre-release ``0.1.0-alpha.1``, for example, is ``0.1.0a1``).
 ```
 
-The package also re-exports the exceptions of {mod}`absrbrs.errors`, and provides {mod}`absrbrs.special`.
+The package also re-exports {class}`absrbrs.LineList` and the exceptions of {mod}`absrbrs.errors`,
+and provides {mod}`absrbrs.partition` and {mod}`absrbrs.special`.
+
+## `absrbrs.LineList`
+
+```{eval-rst}
+.. automodule:: absrbrs.lines
+   :no-members:
+
+.. autoclass:: absrbrs.LineList
+   :members:
+```
+
+## `absrbrs.partition`
+
+```{eval-rst}
+.. automodule:: absrbrs.partition
+   :members:
+```
 
 ## `absrbrs.special`
 

@@ -1,7 +1,8 @@
-//! Conversion of `absrbrs::Error` into the exception classes defined in `absrbrs.errors`.
+//! Conversion of `absrbrs::Error` into the exception classes defined in `absrbrs.errors`, and
+//! the error helpers shared by the bindings.
 
 use pyo3::exceptions::{
-    PyException, PyFileNotFoundError, PyOSError, PyPermissionError, PyRuntimeError,
+    PyException, PyFileNotFoundError, PyMemoryError, PyOSError, PyPermissionError, PyRuntimeError,
 };
 use pyo3::prelude::*;
 
@@ -66,4 +67,25 @@ pub fn to_pyerr(py: Python<'_>, err: absrbrs::Error) -> PyErr {
         e.set_cause(py, Some(failure));
         e
     })
+}
+
+/// The `InvalidInputError` for `message`.
+pub fn invalid(py: Python<'_>, message: String) -> PyErr {
+    to_pyerr(py, absrbrs::Error::InvalidInput(message))
+}
+
+/// An empty vector with room for `len` values, or `MemoryError` (spec §9.2: fallible allocation).
+pub fn reserved<T>(len: usize, what: &str) -> PyResult<Vec<T>> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len).map_err(|e| {
+        PyMemoryError::new_err(format!("cannot allocate {len} values for {what}: {e}"))
+    })?;
+    Ok(v)
+}
+
+/// A copy of `values`, or `MemoryError` if it cannot be allocated.
+pub fn copied<T: Copy>(values: &[T], what: &str) -> PyResult<Vec<T>> {
+    let mut v = reserved(values.len(), what)?;
+    v.extend_from_slice(values);
+    Ok(v)
 }

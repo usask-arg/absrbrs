@@ -3,35 +3,20 @@
 
 use absrbrs::faddeeva::{self, Complex64, Tier};
 use numpy::{IntoPyArray, PyArray1, PyArrayMethods};
-use pyo3::exceptions::{PyBufferError, PyMemoryError};
+use pyo3::exceptions::PyBufferError;
 use pyo3::prelude::*;
 
-use crate::errors::to_pyerr;
+use crate::errors::{invalid, reserved};
 
 fn tier(py: Python<'_>, name: &str) -> PyResult<Tier> {
     match name {
         "fast" => Ok(Tier::Fast),
         "accurate" => Ok(Tier::Accurate),
-        _ => Err(to_pyerr(
+        _ => Err(invalid(
             py,
-            absrbrs::Error::InvalidInput(format!(
-                "tier must be 'fast' or 'accurate', not {name:?}"
-            )),
+            format!("tier must be 'fast' or 'accurate', not {name:?}"),
         )),
     }
-}
-
-/// An empty vector with room for `len` values, or `MemoryError` (spec §9.2: fallible allocation).
-fn reserved<T>(len: usize, what: &str) -> PyResult<Vec<T>> {
-    let mut v = Vec::new();
-    v.try_reserve_exact(len).map_err(|e| {
-        PyMemoryError::new_err(format!("cannot allocate {len} values for {what}: {e}"))
-    })?;
-    Ok(v)
-}
-
-fn invalid(py: Python<'_>, message: String) -> PyErr {
-    to_pyerr(py, absrbrs::Error::InvalidInput(message))
 }
 
 /// w(z) and w′(z) at every z (Im z ≥ 0, finite).
