@@ -8,6 +8,7 @@ pub mod error;
 pub mod faddeeva;
 pub mod io;
 pub mod lines;
+pub mod partition;
 #[cfg(test)]
 mod test_data;
 

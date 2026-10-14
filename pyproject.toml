@@ -9,7 +9,12 @@ dynamic = ["version"]
 description = "Molecular absorption cross sections with first-class linearization"
 readme = "README.md"
 license = "MIT"
-license-files = ["LICENSE", "absrbrs/LICENSES/Faddeeva-MIT.txt", "absrbrs/LICENSES/HAPI-MIT.txt"]
+license-files = [
+    "LICENSE",
+    "absrbrs/LICENSES/Faddeeva-MIT.txt",
+    "absrbrs/LICENSES/HAPI-MIT.txt",
+    "absrbrs/LICENSES/TIPS-2021-MIT.txt",
+]
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26"]
 classifiers = [
@@ -50,9 +55,11 @@ cache-keys = [
     { file = ".cargo/config.toml" },
     { file = "absrbrs/Cargo.toml" },
     { file = "absrbrs/src/**/*.rs" },
+    { file = "absrbrs/data/**" },
     { file = "absrbrs-py/Cargo.toml" },
     { file = "absrbrs-py/build.rs" },
     { file = "absrbrs-py/src/**/*.rs" },
+    { file = "rust-toolchain.toml" },
 ]
 
 [tool.maturin]
