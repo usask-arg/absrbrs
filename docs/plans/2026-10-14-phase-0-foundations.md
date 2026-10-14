@@ -1683,7 +1683,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Produces, used by Task 5:
   - `candidates.evaluate(key: tuple[str, int], z) -> (w, dw)`, with method names `"jpole8"`, `"weideman"`, `"cf"`, `"gauss_cf"` and `"taylor"`. The individual functions are `jpole8(z)`, `weideman(z, n)`, `laplace_cf(z, depth)`, `gauss_cf(z, depth)` and `small_y_taylor(z, order)`.
   - `metrics.value_error(w, w_ref)` and `metrics.derivative_error(dw, dw_ref)`, implementing the spec §6.2 metrics.
-  - From `reference`: `complex_points(x, y)`, `load_committed(path=COMMITTED)`, `arb_w(x, y) -> (re_w, im_w, re_dw, im_dw)`, `dense_grid()`, `compute(z)` and `dense(cache=CACHE)`, plus the constants `REPO`, `COMMITTED` and `CACHE`.
+  - From `reference`: `complex_points(x, y)`, `load_committed(path=COMMITTED)`, `arb_w(x, y) -> (re_w, im_w, re_dw, im_dw)`, `dense_grid()`, `holdout_points()`, `compute(z)`, `cached(z, cache)`, `dense(cache=CACHE)` and `holdout(cache=HOLDOUT_CACHE)`, plus the constants `REPO`, `COMMITTED`, `CACHE`, `HOLDOUT_CACHE`, `X_EDGES` and `Y_EDGES`.
 
 Background for the implementer:
 - w(z) is the Faddeeva function, and the Voigt line shape is K = Re w(x + iy). Every candidate returns the derivative of its own formula, never w′ from the identity −2zw + 2i/√π, because that identity cancels catastrophically in the wings.
@@ -1762,7 +1762,9 @@ def relative(a, b):
 
 
 @pytest.mark.parametrize(("n", "tol_w", "tol_dw"), [(32, 1e-12, 1e-10), (40, 1e-14, 1e-13)])
-def test_weideman_is_accurate_away_from_the_real_axis(n, tol_w, tol_dw):
+def test_weideman_matches_arb_in_modulus(n, tol_w, tol_dw):
+    # |Δw|/|w| and |Δw′|/|w′| for 0 ≤ x ≤ 8, 1e-6 ≤ y ≤ 10; the spec metric (relative to K) is
+    # what the search measures.
     z = grid(np.linspace(0, 8, 33), np.logspace(-6, 1, 15))
     w_ref, dw_ref = arb_values(z)
     w, dw = candidates.weideman(z, n)
@@ -1797,12 +1799,15 @@ def test_gaussian_plus_continued_fraction_near_the_real_axis():
     assert derivative_error(dw, dw_ref).max() < 1e-9
 
 
-def test_small_y_taylor_series():
-    z = complex_points(np.linspace(0, 5, 51), np.full(51, 1e-4))
+@pytest.mark.parametrize(("y", "tol_w", "tol_dw"), [(1e-4, 1e-13, 1e-11), (1e-2, 2e-7, 5e-6)])
+def test_small_y_taylor_series(y, tol_w, tol_dw):
+    # Order 3 over the region the composites may give it (|x| < 6, y ≤ 0.01). The derivative is
+    # that of the formula: its y-part is a series one order shorter, hence the looser tolerance.
+    z = complex_points(np.linspace(0, 6, 61), np.full(61, y))
     w_ref, dw_ref = arb_values(z)
     w, dw = candidates.small_y_taylor(z, 3)
-    assert value_error(w, w_ref).max() < 1e-12
-    assert derivative_error(dw, dw_ref).max() < 1e-12
+    assert value_error(w, w_ref).max() < tol_w
+    assert derivative_error(dw, dw_ref).max() < tol_dw
 
 
 def test_jpole8_reproduces_the_sasktran2_error():
@@ -1815,23 +1820,33 @@ def test_jpole8_reproduces_the_sasktran2_error():
     assert abs(z[err.argmax()].real - 9.76) < 0.05
 
 
-@pytest.mark.parametrize(
-    ("key", "z0"),
-    [
-        (("weideman", 32), 1.3 + 0.7j),
-        (("cf", 4), 25.0 + 3.0j),
-        (("gauss_cf", 6), 6.0 + 0.01j),
-        (("taylor", 3), 2.0 + 1e-3j),
-        (("jpole8", 0), 1.3 + 0.7j),
-    ],
-)
-def test_derivative_is_that_of_the_formula(key, z0):
+FORMULA_POINTS = [
+    (("weideman", 32), 1.3 + 0.7j),
+    (("cf", 4), 25.0 + 3.0j),
+    (("gauss_cf", 6), 6.0 + 0.01j),
+    (("taylor", 3), 2.0 + 1e-3j),
+    (("taylor", 3), 2.6 + 1e-2j),
+    (("jpole8", 0), 1.3 + 0.7j),
+]
+
+
+def k_x_and_k_y(key, z0):
+    """The formula's K_x and K_y by central differences, and dw at z0."""
     h = 1e-5 * max(1.0, abs(z0))
-    w_plus, _ = candidates.evaluate(key, np.array([z0 + h]))
-    w_minus, _ = candidates.evaluate(key, np.array([z0 - h]))
+
+    def k(z):
+        return candidates.evaluate(key, np.array([z]))[0][0].real
+
     _, dw = candidates.evaluate(key, np.array([z0]))
-    finite_difference = (w_plus - w_minus) / (2 * h)
-    assert abs(finite_difference[0] - dw[0]) / abs(dw[0]) < 1e-8
+    return (k(z0 + h) - k(z0 - h)) / (2 * h), (k(z0 + 1j * h) - k(z0 - 1j * h)) / (2 * h), dw[0]
+
+
+@pytest.mark.parametrize(("key", "z0"), FORMULA_POINTS)
+def test_derivative_is_that_of_the_formula(key, z0):
+    # dw = K_x − i K_y of the candidate's own formula, in both directions.
+    k_x, k_y, dw = k_x_and_k_y(key, z0)
+    assert abs(k_x - dw.real) / abs(dw) < 1e-8
+    assert abs(k_y + dw.imag) / abs(dw) < 1e-8
 ```
 
 Create `prototypes/faddeeva/tests/test_metrics.py`:
@@ -1859,6 +1874,17 @@ def test_derivative_error_is_componentwise_relative_to_the_modulus():
 
 def test_nan_is_never_hidden():
     assert np.isnan(value_error(np.array([np.nan + 0j]), np.array([1.0 + 0j]))[0])
+    assert np.isnan(derivative_error(np.array([np.nan + 1j]), np.array([1.0 + 1j]))[0])
+
+
+def test_non_finite_values_count_even_at_exempt_points():
+    w_ref = np.full(3, 1e-320 + 1j)
+    err = value_error(np.array([np.nan + 0j, np.inf + 0j, 1.0 + 0j]), w_ref)
+    assert np.isnan(err[0]) and np.isnan(err[1]) and err[2] == 0.0
+
+
+def test_a_nan_reference_is_never_exempt():
+    assert np.isnan(value_error(np.array([1.0 + 0j]), np.array([complex(np.nan, 1.0)]))[0])
 ```
 
 Run: `uv lock --directory prototypes/faddeeva && uv run --locked --directory prototypes/faddeeva python -m pytest -q`
@@ -1872,8 +1898,10 @@ Create `prototypes/faddeeva/faddeeva_prototype/reference.py`:
 ```python
 """Reference values of w and w′: the committed Arb grid, and a denser Arb map cached locally.
 
-The dense map is not committed (it is about 140 000 points); ``dense()`` computes it once with
-Arb, in parallel, and caches it in ``prototypes/faddeeva/.cache/dense.npz``.
+Neither the dense map (about 140 000 grid points) nor the holdout (400 000 random points) is
+committed: ``dense()`` and ``holdout()`` compute them once with Arb, in parallel, and cache them
+in ``prototypes/faddeeva/.cache/``. Their inputs use the platform's ``10.0 **`` and numpy's
+generator, so they are reproducible on one platform but not bit-portable.
 """
 
 from __future__ import annotations
@@ -1892,6 +1920,17 @@ PROTOTYPE = Path(__file__).resolve().parents[1]
 REPO = PROTOTYPE.parents[1]
 COMMITTED = REPO / "reference" / "data" / "faddeeva.jsonl"
 CACHE = PROTOTYPE / ".cache" / "dense.npz"
+HOLDOUT_CACHE = PROTOTYPE / ".cache" / "holdout.npz"
+
+#: Region boundaries that the `search` template chooses between, in |x| (or |z|, which equals
+#: |x| at small y) and in y. A region's errors peak at its edges, so the dense grid samples
+#: each boundary and the double on its other side.
+X_EDGES = (
+    4.0, 5.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 27.0, 30.0, 50.0, 100.0, 300.0, 1000.0, 3000.0,
+)  # fmt: skip
+Y_EDGES = (1e-3, 1e-2, 0.1, 0.5)
+HOLDOUT_POINTS = 400_000
+HOLDOUT_SEED = 20261014
 
 #: Each component used by the metrics is known to this relative accuracy before rounding.
 REL_BITS = 60
@@ -1952,11 +1991,48 @@ def _arb_pair(xy: tuple[float, float]) -> tuple[float, float, float, float]:
 
 
 def dense_grid() -> Complex:
-    """x ∈ {0, 1/32, …, 12} or {10^(k/16) : |k| ≤ 128}; y ∈ {0} or {10^(k/6) : −180 ≤ k ≤ 36}."""
-    xs = np.unique(np.concatenate([np.arange(385) / 32.0, 10.0 ** (np.arange(-128, 129) / 16)]))
-    ys = np.concatenate([[0.0], 10.0 ** (np.arange(-180, 37) / 6)])
+    """x ∈ {0, 1/32, …, 12} or {10^(k/16) : |k| ≤ 128}, y ∈ {0} or {10^(k/6) : −180 ≤ k ≤ 36},
+    with every X_EDGES value and the double below it, and every Y_EDGES value and the double
+    above it."""
+    x_edges = np.array(X_EDGES)
+    y_edges = np.array(Y_EDGES)
+    xs = np.unique(
+        np.concatenate(
+            [
+                np.arange(385) / 32.0,
+                10.0 ** (np.arange(-128, 129) / 16),
+                x_edges,
+                np.nextafter(x_edges, -np.inf),
+            ]
+        )
+    )
+    ys = np.unique(
+        np.concatenate(
+            [[0.0], 10.0 ** (np.arange(-180, 37) / 6), y_edges, np.nextafter(y_edges, np.inf)]
+        )
+    )
     x, y = np.meshgrid(xs, ys)
     return complex_points(x.ravel(), y.ravel())
+
+
+def holdout_points(n: int = HOLDOUT_POINTS, seed: int = HOLDOUT_SEED) -> Complex:
+    """Random points, independent of every threshold: a third with x uniform on [0, 30], a third
+    with x uniform on [0, 12], a third with log10 x uniform on [−8, 8]; y = 0 for a tenth, log10 y
+    uniform on [−4, 0] for three tenths and on [−30, 6] for the rest."""
+    rng = np.random.default_rng(seed)
+    kind = rng.integers(0, 3, n)
+    x = np.where(
+        kind == 0,
+        rng.uniform(0, 30, n),
+        np.where(kind == 1, 10.0 ** rng.uniform(-8, 8, n), rng.uniform(0, 12, n)),
+    )
+    ky = rng.integers(0, 10, n)
+    y = np.where(
+        ky == 0,
+        0.0,
+        np.where(ky < 4, 10.0 ** rng.uniform(-4, 0, n), 10.0 ** rng.uniform(-30, 6, n)),
+    )
+    return complex_points(x, y)
 
 
 def compute(z: Complex, workers: int | None = None) -> tuple[Complex, Complex]:
@@ -1967,16 +2043,27 @@ def compute(z: Complex, workers: int | None = None) -> tuple[Complex, Complex]:
     return complex_points(out[:, 0], out[:, 1]), complex_points(out[:, 2], out[:, 3])
 
 
-def dense(cache: Path = CACHE) -> tuple[Complex, Complex, Complex]:
-    """The dense map ``(z, w, dw)``, computed on first use and cached."""
+def cached(z: Complex, cache: Path) -> tuple[Complex, Complex, Complex]:
+    """Arb values ``(z, w, dw)`` at ``z``, from ``cache`` if it holds exactly these points, and
+    otherwise computed and cached."""
     if cache.exists():
         data = np.load(cache)
-        return data["z"], data["w"], data["dw"]
-    z = dense_grid()
+        if np.array_equal(data["z"], z):
+            return data["z"], data["w"], data["dw"]
     w, dw = compute(z)
     cache.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(cache, z=z, w=w, dw=dw)
     return z, w, dw
+
+
+def dense(cache: Path = CACHE) -> tuple[Complex, Complex, Complex]:
+    """The dense map ``(z, w, dw)`` on `dense_grid`."""
+    return cached(dense_grid(), cache)
+
+
+def holdout(cache: Path = HOLDOUT_CACHE) -> tuple[Complex, Complex, Complex]:
+    """The holdout ``(z, w, dw)`` at `holdout_points`."""
+    return cached(holdout_points(), cache)
 ```
 
 Create `prototypes/faddeeva/faddeeva_prototype/metrics.py`:
@@ -1994,11 +2081,16 @@ TINY = float(np.finfo(np.float64).tiny)
 
 
 def value_error(w: NDArray[np.complex128], w_ref: NDArray[np.complex128]) -> NDArray[np.float64]:
-    """|K − K_ref| / K_ref, with K = Re w; 0 where K_ref < TINY."""
+    """|K − K_ref| / K_ref, with K = Re w.
+
+    Where K_ref < TINY the point is exempt: the error is 0 if K is finite and NaN otherwise. A
+    NaN anywhere else (in K or K_ref) gives a NaN error, so it is never hidden.
+    """
     k = w_ref.real
     with np.errstate(all="ignore"):
         err = np.abs(w.real - k) / k
-    return np.where(k >= TINY, err, 0.0)
+    exempt = np.where(np.isfinite(w.real), 0.0, np.nan)
+    return np.where(k < TINY, exempt, err)
 
 
 def derivative_error(
@@ -2018,9 +2110,14 @@ Create `prototypes/faddeeva/faddeeva_prototype/candidates.py`:
 ```python
 """Candidate approximations of the Faddeeva function w(z) = exp(-z²) erfc(-iz), for Im z ≥ 0.
 
-Every candidate returns ``(w, dw)``: w(z) and its derivative w′(z), both from the same formula
-(the derivative of the approximation itself, never the identity w′ = −2zw + 2i/√π), as
-complex128 arrays shaped like ``z``.
+Every candidate returns ``(w, dw)`` as complex128 arrays shaped like ``z``: w(z), and
+dw = K_x − i K_y, where K_x and K_y are the x- and y-derivatives of K = Re w *of the candidate's
+own formula*. For the analytic candidates dw is the derivative w′(z) of the approximation (never
+the identity w′ = −2zw + 2i/√π applied to it); for the Taylor series, which is not analytic in
+z, it is built from the formula's two partial derivatives.
+
+Each candidate is meant for part of the upper half-plane only, as its docstring says; the
+composites of `search` use them only there.
 """
 
 from __future__ import annotations
@@ -2031,6 +2128,8 @@ from math import factorial
 import numpy as np
 from numpy.typing import NDArray
 from scipy.special import dawsn
+
+from faddeeva_prototype.reference import complex_points
 
 Complex = NDArray[np.complex128]
 
@@ -2080,7 +2179,9 @@ def weideman_coefficients(n: int) -> tuple[NDArray[np.float64], float]:
     t = big_l * np.tan(k * np.pi / (2 * m))
     f = np.concatenate([[0.0], np.exp(-(t**2)) * (big_l**2 + t**2)])
     a = np.real(np.fft.fft(np.fft.fftshift(f))) / (2 * m)
-    return a[1 : n + 1][::-1].copy(), float(big_l)
+    a = a[1 : n + 1][::-1].copy()
+    a.flags.writeable = False  # shared by every caller through the cache
+    return a, float(big_l)
 
 
 def weideman(z: Complex, n: int) -> tuple[Complex, Complex]:
@@ -2099,7 +2200,10 @@ def weideman(z: Complex, n: int) -> tuple[Complex, Complex]:
 def laplace_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
     """Laplace continued fraction truncated after ``depth`` levels:
     w ≈ (i/√π) / (z − ½/(z − 1/(z − (3/2)/(z − …)))). Depth 0 is the Lorentzian i/(√π z);
-    depth 1 is Humlíček's region-I formula iz/(√π (z² − ½))."""
+    depth 1 is Humlíček's region-I formula iz/(√π (z² − ½)).
+
+    An asymptotic expansion: accurate for large |z| only. The truncated fraction has poles on
+    the real axis (NaN there), all within |x| < 6 for depth ≤ 16; use it for |z| ≥ 8."""
     f = np.array(z, dtype=np.complex128, copy=True)
     fp = np.ones_like(f)
     for k in range(depth, 0, -1):
@@ -2110,7 +2214,8 @@ def laplace_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
 
 def gauss_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
     """exp(−z²) plus the continued fraction: keeps the Gaussian core that the asymptotic
-    expansion lacks, for small y and moderate |x|."""
+    expansion lacks, for small y and moderate |x|. exp(−z²) = exp(y² − x²) e^(−2ixy) overflows
+    for y above about 26.6, so this is for small y only."""
     g = np.exp(-(z * z))
     w, dw = laplace_cf(z, depth)
     return w + g, dw - 2 * z * g
@@ -2119,7 +2224,13 @@ def gauss_cf(z: Complex, depth: int) -> tuple[Complex, Complex]:
 def small_y_taylor(z: Complex, order: int) -> tuple[Complex, Complex]:
     """Taylor series in iy about the real axis, to (iy)^order:
     w(x + iy) ≈ Σₖ (iy)ᵏ w⁽ᵏ⁾(x)/k!, with w(x) = exp(−x²) + (2i/√π) D(x) (D: Dawson) and
-    w⁽ᵏ⁺¹⁾ = −2x w⁽ᵏ⁾ − 2k w⁽ᵏ⁻¹⁾."""
+    w⁽ᵏ⁺¹⁾ = −2x w⁽ᵏ⁾ − 2k w⁽ᵏ⁻¹⁾.
+
+    The truncated series is not analytic in z, so its y-derivative is not i times its
+    x-derivative: dw is built from ∂K/∂x = Re Σₖ (iy)ᵏ w⁽ᵏ⁺¹⁾/k! and
+    ∂K/∂y = Re(i Σₖ₍ₖ₌₀…ₙ₋₁₎ (iy)ᵏ w⁽ᵏ⁺¹⁾/k!) of the formula itself. On the real axis w′(x)
+    comes from the identity −2xw + 2i/√π, which loses about 2x² in relative accuracy: for
+    |x| ≲ 6 only."""
     x = z.real
     iy = 1j * z.imag
     w0 = np.exp(-(x * x)) + 2j * INV_SQRT_PI * dawsn(x)
@@ -2127,12 +2238,17 @@ def small_y_taylor(z: Complex, order: int) -> tuple[Complex, Complex]:
     for k in range(1, order + 1):
         derivs.append(-2 * x * derivs[k] - 2 * k * derivs[k - 1])
     w = np.zeros_like(w0)
-    dw = np.zeros_like(w0)
+    d_x = np.zeros_like(w0)
+    d_y = np.zeros_like(w0)
     for k in range(order + 1):
         c = iy**k / factorial(k)
         w = w + c * derivs[k]
-        dw = dw + c * derivs[k + 1]
-    return w, dw
+        d_x = d_x + c * derivs[k + 1]
+        if k < order:
+            d_y = d_y + c * derivs[k + 1]
+    k_x = d_x.real
+    k_y = (1j * d_y).real
+    return w, complex_points(k_x, -k_y)
 
 
 #: Every method the search may use, by key ``(name, parameter)``.
@@ -2159,7 +2275,7 @@ uv run --locked --directory prototypes/faddeeva python -m pytest -q
 uv run --locked ruff check . && uv run --locked ruff format --check .
 ```
 
-Expected: `15 passed`, and ruff clean. The tolerances in `test_candidates.py` were measured against Arb, with a margin of 3× to 10×:
+Expected: `19 passed`, and ruff clean. The tolerances in `test_candidates.py` were measured against Arb, with a margin of 3× to 10×:
 
 | Check | Measured |
 |---|---|
@@ -2167,9 +2283,10 @@ Expected: `15 passed`, and ruff clean. The tolerances in `test_candidates.py` we
 | Weideman 40, w / w′ | 9.5e-16 / 1.3e-14 |
 | CF depth 8 at \|z\| ≥ 20 | 2.7e-16 / 3.4e-16 |
 | exp + CF depth 8 | 2.6e-11 |
-| Taylor order 3 | 1.6e-14 |
+| Taylor order 3, y = 1e-4, value / derivative | 2.6e-14 / 1.8e-12 |
+| Taylor order 3, y = 1e-2, value / derivative | 8.7e-8 / 1.8e-6 |
 | J-pole maximum | 1.30e-3 at x = 9.76 |
-| Finite-difference consistency | ≤ 2e-10 |
+| Finite-difference consistency, x and y directions | ≤ 2e-10 |
 
 A failure means the code differs from this plan. Never loosen a tolerance to make a test pass.
 
@@ -2193,16 +2310,16 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `docs/plans/phase-0-followups.md`
 
 **Interfaces:**
-- Consumes: from Task 4, `candidates.evaluate`, `metrics.value_error`, `metrics.derivative_error`, and from `reference`: `load_committed`, `dense`, `complex_points`, `arb_w` and `REPO`.
+- Consumes: from Task 4, `candidates.evaluate`, `metrics.value_error`, `metrics.derivative_error`, and from `reference`: `load_committed`, `dense`, `holdout`, `complex_points`, `arb_w` and `REPO`.
 - Produces:
-  - `search.Region`, `search.assign`, `search.ErrorTable`, `search.measure`, `search.search`, `search.cost`, `search.BASELINES` and `search.TARGET_VALUE`/`TARGET_DERIVATIVE`/`MARGIN`;
+  - `search.Region`, `search.assign`, `search.ErrorTable`, `search.measure`, `search.holdout_errors`, `search.search`, `search.cost`, `search.meets`, `search.BASELINES` and `search.TARGET_VALUE`/`TARGET_DERIVATIVE`/`MARGIN`;
   - `occupancy.workload_points()`;
   - the CLI `python -m faddeeva_prototype report`;
   - the report files;
   - the decision record that phase 1a implements.
 
 How the search works:
-1. `ErrorTable` computes, once, the value and derivative error of every method variant (`KEYS`: J-pole, Weideman 24/32/40, CF depth 0 to 16, exp + CF depth 0 to 16, Taylor order 1 to 5) at every evaluation point. That is about 150 000 points, from the committed grid plus the dense Arb map.
+1. `ErrorTable` computes, once, the value and derivative error of every method variant (`KEYS`: J-pole, Weideman 24/32/40, CF depth 0 to 16, exp + CF depth 0 to 16, Taylor order 1 to 5) at every evaluation point. That is 156 802 points, from the committed grid plus the dense Arb map. The dense map samples every region boundary of the template (`reference.X_EDGES`, `Y_EDGES`) and the double on its other side, because a region's errors peak at its edges.
 2. A composite is an ordered list of `Region`s; the first region that matches a point decides its method.
 3. `build` fills one template:
    1. exp + CF for y ≤ y_g and x_g ≤ |x| < 27;
@@ -2212,6 +2329,7 @@ How the search works:
 
    Each region gets the smallest depth that meets **half** of each target. The factor of two is margin for the Rust port.
 4. `search` tries every combination of `GRID` and ranks the valid composites by expected cost. The cost is a flop-count proxy, weighted by where the grid points of the representative atmospheric lines (`occupancy.py`) fall.
+5. The report selects the cheapest valid composite that *also* meets half of each target on a holdout of 400 000 random Arb points (`reference.holdout`), which share no thresholds with the template. The grid alone could miss an error peak between its points.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2264,6 +2382,23 @@ def test_measure_reports_occupancy_that_sums_to_one():
     assert math.isclose(sum(result.occupancy), 1.0)
     assert result.occupancy == pytest.approx([1 / 3, 2 / 3])
     assert result.expected_cost == pytest.approx((cost(("cf", 0)) + 2 * cost(("cf", 1))) / 3)
+
+
+def test_holdout_errors_cover_every_region_and_count_nan_as_infinite():
+    z = complex_points(np.array([50.0, 2000.0]), np.array([1e-3, 10.0]))
+    v = np.array([arb_w(float(q.real), float(q.imag)) for q in z])
+    w, dw = complex_points(v[:, 0], v[:, 1]), complex_points(v[:, 2], v[:, 3])
+    regions = [Region("far", ("cf", 0), r_min=1000.0), Region("rest", ("cf", 1))]
+    value, derivative = search.holdout_errors(regions, z, w, dw)
+    assert 0 < value < 5e-7 and 0 < derivative < 5e-7
+    # The continued fraction is NaN at z = 0, where w = 1 and w′ = 2i/√π.
+    nan_case = search.holdout_errors(
+        [Region("all", ("cf", 0))],
+        np.array([0j]),
+        np.array([1 + 0j]),
+        np.array([2j / math.sqrt(math.pi)]),
+    )
+    assert nan_case == (math.inf, math.inf)
 ```
 
 Create `prototypes/faddeeva/tests/test_occupancy.py`:
@@ -2524,6 +2659,27 @@ class Result:
         }
 
 
+def holdout_errors(
+    regions: list[Region],
+    z: NDArray[np.complex128],
+    w_ref: NDArray[np.complex128],
+    dw_ref: NDArray[np.complex128],
+) -> tuple[float, float]:
+    """The largest value and derivative errors of a composite at points it was not chosen on
+    (NaN counts as ∞)."""
+    index = assign(regions, z)
+    worst = [0.0, 0.0]
+    for i, region in enumerate(regions):
+        mask = index == i
+        if not mask.any():
+            continue
+        with np.errstate(all="ignore"):
+            w, dw = evaluate(region.method, z[mask])
+        for j, err in enumerate((value_error(w, w_ref[mask]), derivative_error(dw, dw_ref[mask]))):
+            worst[j] = max(worst[j], math.inf if np.isnan(err).any() else float(err.max()))
+    return worst[0], worst[1]
+
+
 def measure(regions: list[Region], table: ErrorTable, workload: NDArray[np.complex128]) -> Result:
     """Errors over the evaluation points and cost over the workload points of a composite."""
     index = assign(regions, table.z)
@@ -2650,21 +2806,25 @@ def _fmt(v: float) -> str:
     return f"{v:.1e}"
 
 
-def table_markdown(baselines: dict[str, search.Result], results: list[search.Result]) -> str:
+def table_markdown(
+    baselines: dict[str, search.Result],
+    best: search.Result | None,
+    holdout: dict[str, tuple[float, float]],
+) -> str:
     lines = [
-        "| Algorithm | Max value error | Max derivative error | Expected cost |",
-        "|---|---|---|---|",
+        "| Algorithm | Max value error | Max derivative error | Holdout value error "
+        "| Holdout derivative error | Expected cost |",
+        "|---|---|---|---|---|---|",
     ]
-    for name, r in baselines.items():
+    rows = [*baselines.items(), *([("**Selected composite**", best)] if best else [])]
+    for name, r in rows:
+        hv, hd = holdout[name]
         lines.append(
             f"| {name} | {_fmt(r.max_value_error)} | {_fmt(r.max_derivative_error)} "
-            f"| {r.expected_cost:.0f} |"
+            f"| {_fmt(hv)} | {_fmt(hd)} | {r.expected_cost:.0f} |"
         )
-    if results:
-        best = results[0]
+    if best:
         lines += [
-            f"| **Selected composite** | {_fmt(best.max_value_error)} "
-            f"| {_fmt(best.max_derivative_error)} | {best.expected_cost:.0f} |",
             "",
             "Regions of the selected composite (first match wins):",
             "",
@@ -2692,6 +2852,7 @@ def main(argv: list[str] | None = None) -> int:
 
     zc, wc, dwc = reference.load_committed()
     zd, wd, dwd = reference.dense()
+    zh, wh, dwh = reference.holdout()
     z, w, dw = (np.concatenate(p) for p in ((zc, zd), (wc, wd), (dwc, dwd)))
     table = search.ErrorTable(z, w, dw)
     workload = occupancy.workload_points()
@@ -2699,25 +2860,48 @@ def main(argv: list[str] | None = None) -> int:
     baselines = {
         name: search.measure(regions, table, workload) for name, regions in search.BASELINES.items()
     }
+    holdout = {
+        name: search.holdout_errors(search.BASELINES[name], zh, wh, dwh) for name in baselines
+    }
     results = search.search(table, workload)
+    # The selected composite is the cheapest that also meets the targets, with the margin, on
+    # the random holdout: the grid alone could miss an error peak between its points.
+    rejected = 0
+    best = None
+    for candidate in results:
+        errors = search.holdout_errors(candidate.regions, zh, wh, dwh)
+        if search.meets(errors):
+            best = candidate
+            holdout["**Selected composite**"] = errors
+            break
+        rejected += 1
     report = {
         "targets": {
             "value": search.TARGET_VALUE,
             "derivative": search.TARGET_DERIVATIVE,
             "margin": search.MARGIN,
         },
-        "evaluation_points": {"committed": int(zc.size), "dense": int(zd.size)},
+        "evaluation_points": {
+            "committed": int(zc.size),
+            "dense": int(zd.size),
+            "holdout": int(zh.size),
+        },
         "workload_points": int(workload.size),
-        "baselines": {name: r.to_json() for name, r in baselines.items()},
+        "baselines": {
+            name: {**r.to_json(), "holdout": list(holdout[name])} for name, r in baselines.items()
+        },
         "valid_composites": len(results),
-        "selected": results[0].to_json() if results else None,
-        "runners_up": [r.to_json() for r in results[1:5]],
+        "rejected_on_holdout": rejected,
+        "selected": (
+            {**best.to_json(), "holdout": list(holdout["**Selected composite**"])} if best else None
+        ),
     }
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    args.table.write_text(table_markdown(baselines, results), encoding="utf-8")
-    print(table_markdown(baselines, results), file=sys.stderr)
-    if not results:
+    markdown = table_markdown(baselines, best, holdout)
+    args.table.write_text(markdown, encoding="utf-8")
+    print(markdown, file=sys.stderr)
+    if best is None:
         print("No composite meets the targets: see the baselines in the report.", file=sys.stderr)
         return 1
     return 0
@@ -2734,22 +2918,22 @@ Run:
 uv run --locked --directory prototypes/faddeeva python -m pytest -q
 uv run --locked ruff check . && uv run --locked ruff format --check .
 ```
-Expected: `21 passed`, and ruff clean.
+Expected: `26 passed`, and ruff clean.
 
 - [ ] **Step 6: Run the report**
 
 Run: `uv run --locked --directory prototypes/faddeeva python -m faddeeva_prototype report`
 
-It first computes the dense Arb map, 139 520 points, and caches it in `prototypes/faddeeva/.cache/dense.npz`, which is git-ignored. That takes about 1 s with all cores on an M-series Mac. The search itself takes about 7 s. The command exits with status 0 and prints this table, which is also written to `docs/validation/faddeeva-prototype-table.md`:
+It first computes the dense Arb map (147 626 points) and the holdout (400 000 points), and caches them in `prototypes/faddeeva/.cache/`, which is git-ignored. Together they take a few seconds with all cores on an M-series Mac; the whole command takes about 10 s. The command exits with status 0 and prints this table, which is also written to `docs/validation/faddeeva-prototype-table.md`:
 
 ```markdown
-| Algorithm | Max value error | Max derivative error | Expected cost |
-|---|---|---|---|
-| jpole8 (sasktran2) | 8.4e+294 | 3.3e-06 | 240 |
-| hum1wei24 (HAPI) | 5.9e+79 | 1.7e-04 | 66 |
-| Weideman 32 | 1.3e+290 | 9.8e-12 | 568 |
-| Weideman 40 | 2.5e+287 | 1.4e-14 | 696 |
-| **Selected composite** | 4.8e-07 | 4.8e-07 | 61 |
+| Algorithm | Max value error | Max derivative error | Holdout value error | Holdout derivative error | Expected cost |
+|---|---|---|---|---|---|
+| jpole8 (sasktran2) | 8.4e+294 | 3.3e-06 | 3.9e+297 | 3.3e-06 | 240 |
+| hum1wei24 (HAPI) | 2.6e+86 | 1.7e-04 | 2.4e+86 | 1.9e-04 | 66 |
+| Weideman 32 | 1.3e+290 | 9.8e-12 | 5.7e+292 | 9.8e-12 | 568 |
+| Weideman 40 | 2.5e+287 | 1.4e-14 | 1.1e+290 | 1.4e-14 | 696 |
+| **Selected composite** | 4.8e-07 | 1.8e-06 | 4.8e-07 | 1.8e-06 | 61 |
 
 Regions of the selected composite (first match wins):
 
@@ -2762,16 +2946,16 @@ Regions of the selected composite (first match wins):
 | CF |z| in [15, 20) | cf 2 | 4.8e-07 | 4.8e-07 | 0.15% |
 | CF |z| in [20, 30) | cf 2 | 8.3e-08 | 8.3e-08 | 0.33% |
 | CF |z| in [30, 50) | cf 2 | 7.3e-09 | 7.3e-09 | 0.85% |
-| CF |z| in [50, 100) | cf 1 | 2.6e-07 | 3.7e-07 | 2.11% |
+| CF |z| in [50, 100) | cf 1 | 4.0e-07 | 4.0e-07 | 2.11% |
 | CF |z| in [100, 300) | cf 1 | 2.5e-08 | 2.5e-08 | 8.43% |
-| CF |z| in [300, 1000) | cf 1 | 2.5e-10 | 2.6e-10 | 29.46% |
+| CF |z| in [300, 1000) | cf 1 | 3.1e-10 | 3.1e-10 | 29.46% |
 | CF |z| in [1000, 3000) | cf 1 | 2.5e-12 | 2.5e-12 | 44.64% |
-| CF |z| in [3000, inf) | cf 0 | 1.5e-07 | 1.5e-07 | 13.27% |
-| Taylor | taylor 3 | 8.7e-08 | 1.3e-08 | 0.08% |
-| weideman 24 | weideman 24 | 1.6e-07 | 9.4e-09 | 0.19% |
+| CF |z| in [3000, inf) | cf 0 | 1.7e-07 | 1.7e-07 | 13.27% |
+| Taylor | taylor 3 | 8.7e-08 | 1.8e-06 | 0.08% |
+| weideman 24 | weideman 24 | 2.4e-07 | 9.6e-09 | 0.19% |
 ```
 
-The JSON report goes to `docs/validation/data/faddeeva_prototype.json`, with `"valid_composites": 240`.
+The JSON report goes to `docs/validation/data/faddeeva_prototype.json`, with `"valid_composites": 240` and `"rejected_on_holdout": 0`.
 
 **Decision gate.**
 - If the command exits with status 1, no composite meets the targets. Stop and report the baselines table to the user; do not continue to Step 7.
@@ -2805,8 +2989,10 @@ first region that contains it; |x| is used throughout, with w(−x + iy) = conj(
 | y ≤ 0.01 and \|x\| < 6 | Taylor series in iy, order 3 (needs Dawson's integral) |
 | otherwise | Weideman, 24 terms |
 
-Measured over 148 696 Arb points: maximum value error 4.8e-7 and maximum derivative
-error 4.8e-7, against targets of 1e-6 and 1e-5. The expected cost proxy is 61 flop-equivalents
+Measured over 156 802 Arb grid points, including every region boundary, and confirmed on
+400 000 random Arb points: maximum value error 4.8e-7 and maximum derivative error 1.8e-6,
+against targets of 1e-6 and 1e-5. The derivative maximum is in the Taylor region, where the
+derivative is that of the formula: its y-part is a series one order shorter than the value's. The expected cost proxy is 61 flop-equivalents
 per point, against 240 for sasktran2's J-pole and 66 for HAPI's hum1wei24. About 98% of the
 points of atmospheric line windows fall in the depth-0 and depth-1 continued-fraction regions.
 
@@ -2819,9 +3005,10 @@ confirms spec Appendix A, item 2.
 - Implement the composite above in Rust, returning K, K_x and K_y. In the continued-fraction
   regions (98% of points), evaluate the real and imaginary parts in real arithmetic, without
   complex division. Measure the real cost against the proxy.
-- The margin is tightest in the 15 ≤ |z| < 20 band (4.8e-7 against the 5e-7 half-target).
-  The Rust accuracy map must sample that band densely. If rounding takes it over 1e-6, use
-  depth 3 there.
+- The value margins are tightest in the 15 ≤ |z| < 20 band (4.8e-7 against the 5e-7
+  half-target) and the 50 ≤ |z| < 100 band (4.0e-7, at |z| = 50 and small y). The Rust accuracy
+  map must sample both densely, at their edges especially. If rounding takes either over 1e-6,
+  add one level of depth there.
 - The Taylor region needs Dawson's integral D(x) for |x| < 6. Take it from the
   Accurate-tier port of the Faddeeva Package (its `w_im`), or use a dedicated rational
   approximation. Decide when the Accurate tier is ported.
@@ -3223,10 +3410,11 @@ candidate approximations, each returning w and the derivative of its own formula
 - a Taylor series in y about the real axis, using Dawson's integral;
 - sasktran2's 8-pole approximation, and HAPI's hum1wei24, as baselines.
 
-It measures them against Arb at about 150 000 points: the committed reference grid
-(`reference/data/faddeeva.jsonl`) and a denser map computed with Arb. A search over
-region-switched composites then picks the cheapest one that meets half of each target, leaving
-room for the Rust implementation's rounding. Cost is a flop-count proxy, weighted by where the
+It measures them against Arb at about 157 000 points: the committed reference grid
+(`reference/data/faddeeva.jsonl`) and a denser map computed with Arb, which samples every region
+boundary the search can choose. A search over region-switched composites then picks the
+cheapest one that meets half of each target, leaving room for the Rust implementation's
+rounding, and that also meets it on a holdout of 400 000 random Arb points. Cost is a flop-count proxy, weighted by where the
 grid points of representative atmospheric lines fall in the (|x|, y) plane: O₂ A-band and CO₂
 1.6 µm lines at the surface, near 30 km and near 65 km, on a 0.005 cm⁻¹ grid with a 25 cm⁻¹
 window. Most of those points lie far from the line centre, where a shallow continued fraction
