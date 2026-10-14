@@ -62,8 +62,36 @@ fn accurate_tier_meets_its_targets() {
 }
 
 #[test]
+fn fast_tier_meets_its_targets() {
+    let (v, d) = worst(Tier::Fast);
+    eprintln!(
+        "Fast: value {:e} at ({}, {}), derivative {:e} at ({}, {})",
+        v.0, v.1, v.2, d.0, d.1, d.2
+    );
+    assert!(
+        v.0 <= 1e-6,
+        "value error {:e} at x = {}, y = {}",
+        v.0,
+        v.1,
+        v.2
+    );
+    assert!(
+        d.0 <= 1e-5,
+        "derivative error {:e} at x = {}, y = {}",
+        d.0,
+        d.1,
+        d.2
+    );
+}
+
+#[test]
+fn fast_is_the_default_tier() {
+    assert_eq!(Tier::default(), Tier::Fast);
+}
+
+#[test]
 fn negative_x_follows_the_symmetries_exactly() {
-    for tier in [Tier::Accurate] {
+    for tier in [Tier::Fast, Tier::Accurate] {
         for (x, y) in [
             (0.3, 0.0),
             (2.0, 0.5),

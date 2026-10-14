@@ -7,6 +7,7 @@
 
 mod accurate;
 mod cf;
+mod fast;
 
 pub use num_complex::Complex64;
 
@@ -16,9 +17,13 @@ use crate::{Error, Result};
 pub(crate) const FRAC_1_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 
 /// The accuracy tier of the Faddeeva function (spec §6.3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Tier {
+    /// Value error ≤ 1e-6 relative to Re w; derivative error ≤ 1e-5 relative to |w′|. The
+    /// region-switched composite of docs/plans/phase-0-followups.md. The default.
+    #[default]
+    Fast,
     /// Value error ≤ 2e-13 relative to Re w; derivative error ≤ 2e-12 relative to |w′|. Value
     /// ported from the Faddeeva Package; derivative absrbrs's own. Error bounds hold over the
     /// validated domain (y ≤ 10⁶, |x| ≤ 10⁸).
@@ -51,6 +56,7 @@ pub fn w(z: Complex64, tier: Tier) -> (Complex64, Complex64) {
         z
     };
     let (w, dw) = match tier {
+        Tier::Fast => fast::w_and_derivative(z),
         Tier::Accurate => accurate::w_and_derivative(z),
     };
     if reflect {
