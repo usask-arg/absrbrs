@@ -1,8 +1,95 @@
 //! The Faddeeva function w(z) = exp(−z²) erfc(−iz) and the Voigt kernel (spec §6).
+//!
+//! Every function takes Im z ≥ 0 (y ≥ 0): the Voigt profile is K(x, y) = Re w(x + iy) with
+//! y = γ_L/σ_D ≥ 0. Negative x uses the exact symmetries w(−x + iy) = conj(w(x + iy)) and
+//! w′(−x + iy) = −conj(w′(x + iy)). For Im z < 0 or NaN the results are NaN. Accuracy is
+//! validated for y ≤ 10⁶ and |x| ≤ 10⁸ (spec §6.2).
 
-#[allow(dead_code, unused_imports)] // used by the public API from Task 2 on
 mod accurate;
+mod cf;
+
+pub use num_complex::Complex64;
+
+use crate::{Error, Result};
 
 /// 1/√π.
-#[allow(dead_code)] // used from Task 2 on
 pub(crate) const FRAC_1_SQRT_PI: f64 = 0.564_189_583_547_756_3;
+
+/// The accuracy tier of the Faddeeva function (spec §6.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Tier {
+    /// Value error ≤ 2e-13 relative to Re w; derivative error ≤ 2e-12 relative to |w′|. A port of
+    /// the Faddeeva Package.
+    Accurate,
+}
+
+/// The Voigt kernel triplet at x + iy: K = Re w, K_x = ∂K/∂x and K_y = ∂K/∂y.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Kernel {
+    /// K = Re w(x + iy).
+    pub k: f64,
+    /// ∂K/∂x = Re w′.
+    pub k_x: f64,
+    /// ∂K/∂y = −Im w′.
+    pub k_y: f64,
+}
+
+/// w(z) and its derivative w′(z), for Im z ≥ 0.
+pub fn w(z: Complex64, tier: Tier) -> (Complex64, Complex64) {
+    if z.im.is_nan() || z.im < 0.0 {
+        let nan = Complex64::new(f64::NAN, f64::NAN);
+        return (nan, nan);
+    }
+    let reflect = z.re < 0.0;
+    let z = if reflect {
+        Complex64::new(-z.re, z.im)
+    } else {
+        z
+    };
+    let (w, dw) = match tier {
+        Tier::Accurate => accurate::w_and_derivative(z),
+    };
+    if reflect {
+        (w.conj(), -dw.conj())
+    } else {
+        (w, dw)
+    }
+}
+
+/// The kernel triplet at x + iy, for y ≥ 0.
+pub fn kernel(x: f64, y: f64, tier: Tier) -> Kernel {
+    let (w, dw) = w(Complex64::new(x, y), tier);
+    Kernel {
+        k: w.re,
+        k_x: dw.re,
+        k_y: -dw.im,
+    }
+}
+
+/// The kernel triplet at every x of `x` for one y, into `k`, `k_x` and `k_y` (each as long as
+/// `x`). Results equal those of [`kernel`] bitwise. Returns [`Error::InvalidInput`] if the
+/// lengths differ.
+pub fn kernel_into(
+    x: &[f64],
+    y: f64,
+    tier: Tier,
+    k: &mut [f64],
+    k_x: &mut [f64],
+    k_y: &mut [f64],
+) -> Result<()> {
+    let n = x.len();
+    if k.len() != n || k_x.len() != n || k_y.len() != n {
+        return Err(Error::InvalidInput(format!(
+            "kernel_into: x has {n} values but k, k_x and k_y have {}, {} and {}",
+            k.len(),
+            k_x.len(),
+            k_y.len()
+        )));
+    }
+    for i in 0..n {
+        let triplet = kernel(x[i], y, tier);
+        (k[i], k_x[i], k_y[i]) = (triplet.k, triplet.k_x, triplet.k_y);
+    }
+    Ok(())
+}
