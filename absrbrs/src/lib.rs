@@ -6,6 +6,7 @@
 
 pub mod error;
 pub mod faddeeva;
+pub mod io;
 pub mod lines;
 #[cfg(test)]
 mod test_data;
