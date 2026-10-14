@@ -75,9 +75,50 @@ pub(super) struct FixedRecord {
 impl FixedRecord {
     /// Whether the record is kept: S_ref = 0 (as in sasktran2) and ν₀ ≤ 0 (which a line list
     /// cannot hold) are skipped.
-    pub(super) fn is_kept(&self) -> bool {
-        self.s_ref != 0.0 && self.nu > 0.0
+    ///
+    /// # Errors
+    ///
+    /// The message for [`Error::Parse`](crate::Error::Parse) if S_ref or a half-width is
+    /// negative (checked for every record, kept or not).
+    pub(super) fn keep(&self) -> std::result::Result<bool, String> {
+        for (name, value) in [
+            ("s_ref", self.s_ref),
+            ("gamma_air", self.gamma_air),
+            ("gamma_self", self.gamma_self),
+        ] {
+            if value < 0.0 {
+                return Err(format!("{name} is negative ({value})"));
+            }
+        }
+        Ok(self.s_ref != 0.0 && self.nu > 0.0)
     }
+}
+
+/// A finite number, also in the Fortran forms HAPI accepts: a `D` exponent (`1.5D-03`) and an
+/// exponent with only its sign (`1.234-123` for `1.234E-123`). NaN and infinities are `None`.
+pub(super) fn parse_number(text: &str) -> Option<f64> {
+    let value = match text.parse::<f64>() {
+        Ok(v) => v,
+        Err(_) => fortran_number(text)?,
+    };
+    value.is_finite().then_some(value)
+}
+
+/// The Fortran forms of [`parse_number`]; only reached when Rust's syntax fails.
+fn fortran_number(text: &str) -> Option<f64> {
+    if text.contains(['D', 'd']) {
+        return text.replace(['D', 'd'], "E").parse().ok();
+    }
+    if text.contains(['E', 'e']) {
+        return None;
+    }
+    // A sign after the first character that follows a digit or a point starts the exponent.
+    let at = text.get(1..)?.rfind(['+', '-'])? + 1;
+    let mantissa = text.get(..at)?;
+    if !mantissa.ends_with(|c: char| c.is_ascii_digit() || c == '.') {
+        return None;
+    }
+    format!("{mantissa}E{}", text.get(at..)?).parse().ok()
 }
 
 /// The trimmed text of a field.
@@ -99,10 +140,7 @@ fn text<'a>(
 /// A finite floating-point field.
 fn float(record: &str, range: &Range<usize>, name: &str) -> std::result::Result<f64, String> {
     let t = text(record, range, name)?;
-    match t.parse::<f64>() {
-        Ok(v) if v.is_finite() => Ok(v),
-        _ => Err(format!("{name}: cannot parse {t:?}")),
-    }
+    parse_number(t).ok_or_else(|| format!("{name}: cannot parse {t:?}"))
 }
 
 /// The isotopologue number of a code: `1`–`9` are 1–9, `0` is 10, and `A`–`Z` are 11–36.
@@ -151,10 +189,11 @@ pub(super) fn parse_fixed(
 /// # Errors
 ///
 /// - [`Error::Io`](crate::Error::Io) if the file cannot be read;
-/// - [`Error::Parse`](crate::Error::Parse), with the line number, if a record is not ASCII, is
-///   shorter than 160 bytes, or has a field that does not parse (or is not finite);
-/// - [`Error::InvalidInput`](crate::Error::InvalidInput) if the values do not make a valid
-///   [`LineList`], for example a negative width.
+/// - [`Error::Parse`](crate::Error::Parse), with the line number, if a record is not ASCII,
+///   holds a stray carriage return, is shorter than 160 bytes, has a field that does not parse
+///   (or is not finite), or has a negative S_ref or half-width.
+///
+/// Numbers may also take the Fortran forms `1.5D-03` and `1.234-123` (for `1.234E-123`).
 pub fn read_hitran_par(path: impl AsRef<Path>) -> Result<LineList> {
     let mut lines = Lines::open(path.as_ref())?;
     let path = lines.path.clone();
@@ -172,7 +211,10 @@ pub fn read_hitran_par(path: impl AsRef<Path>) -> Result<LineList> {
         }
         let fields = parse_fixed(record, &FixedLayout::HITRAN)
             .map_err(|message| parse_error(&path, line_number, message))?;
-        if fields.is_kept() {
+        let keep = fields
+            .keep()
+            .map_err(|message| parse_error(&path, line_number, message))?;
+        if keep {
             builder.push(&fields, [f64::NAN; 3]);
         }
     }
@@ -195,6 +237,71 @@ mod tests {
         for bad in ["", "a", "#", "-", "00", "-1"] {
             assert_eq!(isotopologue_number(bad), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn fortran_number_forms() {
+        assert_eq!(parse_number("1.5D-03"), Some(1.5e-3));
+        assert_eq!(parse_number("-2.5d+2"), Some(-250.0));
+        assert_eq!(parse_number("1.234-123"), Some(1.234e-123));
+        assert_eq!(parse_number("1.234+05"), Some(1.234e5));
+        assert_eq!(parse_number("-.5-1"), Some(-0.05));
+        assert_eq!(parse_number("5.-1"), Some(0.5));
+        assert_eq!(parse_number("-.004500"), Some(-0.0045));
+        for bad in [
+            "",
+            "-",
+            "+5-",
+            "1.2E-3-4",
+            "nan",
+            "inf",
+            "-infinity",
+            "1D400",
+            "1..2-3",
+            "abc-1",
+            "1-2-3",
+            "D5",
+            "é-1",
+        ] {
+            assert_eq!(parse_number(bad), None, "{bad:?}");
+        }
+        // Underflow to zero is finite, as with Rust's own syntax.
+        assert_eq!(parse_number("1.0-400"), Some(0.0));
+    }
+
+    #[test]
+    fn negative_intensities_and_widths_are_errors() {
+        let r = FixedRecord {
+            molecule: 1,
+            isotopologue: 1,
+            nu: 1.0,
+            s_ref: 1e-20,
+            gamma_air: 0.07,
+            gamma_self: 0.09,
+            e_lower: 1.0,
+            n_air: 0.7,
+            delta_air: 0.0,
+        };
+        assert_eq!(r.keep(), Ok(true));
+        assert_eq!(FixedRecord { s_ref: 0.0, ..r }.keep(), Ok(false));
+        assert_eq!(FixedRecord { nu: -1.0, ..r }.keep(), Ok(false));
+        assert_eq!(
+            FixedRecord {
+                gamma_self: -0.01,
+                ..r
+            }
+            .keep(),
+            Err("gamma_self is negative (-0.01)".into())
+        );
+        assert!(FixedRecord { s_ref: -1e-20, ..r }.keep().is_err());
+        assert!(
+            FixedRecord {
+                gamma_air: -0.0001,
+                ..r
+            }
+            .keep()
+            .is_err()
+        );
     }
 
     #[test]

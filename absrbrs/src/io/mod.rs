@@ -26,7 +26,7 @@ fn io_error(path: &str, e: &std::io::Error) -> Error {
     }
 }
 
-/// Reads the non-empty lines of a text file one at a time into a reused buffer.
+/// Reads the non-blank lines of a text file one at a time into a reused buffer.
 struct Lines {
     reader: BufReader<File>,
     buffer: Vec<u8>,
@@ -46,11 +46,13 @@ impl Lines {
         })
     }
 
-    /// The next non-empty line without its line ending, and its one-based line number.
+    /// The next non-blank line without its line ending (`\n` or `\r\n`), and its one-based
+    /// line number.
     ///
     /// # Errors
     ///
-    /// [`Error::Io`] if reading fails, and [`Error::Parse`] if the line is not ASCII.
+    /// [`Error::Io`] if reading fails, and [`Error::Parse`] if the line is not ASCII or holds
+    /// a carriage return that is not part of its line ending.
     fn next_line(&mut self) -> Result<Option<(usize, &str)>> {
         let len = loop {
             self.buffer.clear();
@@ -66,11 +68,20 @@ impl Lines {
             if let Some(l) = line.strip_suffix(b"\n") {
                 line = l.strip_suffix(b"\r").unwrap_or(l);
             }
-            if !line.is_empty() {
+            // Lines that are blank (or a lone `\r` at the end of the file) are skipped.
+            if !line.trim_ascii_end().is_empty() {
                 break line.len();
             }
         };
         let line = &self.buffer[..len];
+        if line.contains(&b'\r') {
+            // Old Mac (CR-only) line endings would otherwise hide records inside one line.
+            return Err(parse_error(
+                &self.path,
+                self.line_number,
+                "contains a carriage return inside the line".into(),
+            ));
+        }
         if !line.is_ascii() {
             return Err(parse_error(
                 &self.path,

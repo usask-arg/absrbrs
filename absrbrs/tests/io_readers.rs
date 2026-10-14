@@ -1,10 +1,11 @@
 //! The line-file readers, on synthetic records written here (HITRAN data is never committed).
 
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use absrbrs::Error;
 use absrbrs::io::{read_hapi, read_hitran_par};
-use absrbrs::lines::LineField;
+use absrbrs::lines::{LineField, LineList};
 
 /// `v` with `prec` decimals right-aligned in `width` characters, dropping the leading zero when
 /// needed, as HITRAN's Fortran formats do (".0712", "-.004500").
@@ -48,10 +49,58 @@ fn record(
     format!("{r:<160}")
 }
 
-fn tmp(name: &str) -> PathBuf {
+/// A temporary directory, removed when dropped.
+struct TempDir(PathBuf);
+
+impl std::ops::Deref for TempDir {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for TempDir {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A fresh temporary directory; `name` must be unique among the tests of this file.
+fn tmp(name: &str) -> TempDir {
     let dir = std::env::temp_dir().join(format!("absrbrs-io-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    dir
+    TempDir(dir)
+}
+
+/// Writes `text` as `<dir>/f.par` and reads it.
+fn read_par_text(dir: &Path, text: impl AsRef<[u8]>) -> absrbrs::Result<LineList> {
+    let path = dir.join("f.par");
+    std::fs::write(&path, text).unwrap();
+    read_hitran_par(&path)
+}
+
+/// The line number and message of a parse error, or a panic for anything else.
+fn parse_error(result: absrbrs::Result<LineList>) -> (usize, String) {
+    match result {
+        Err(Error::Parse {
+            line_number,
+            message,
+            ..
+        }) => (line_number, message),
+        other => panic!("expected a parse error, got {other:?}"),
+    }
+}
+
+/// A valid record with ν₀ = 6300.5.
+fn good() -> String {
+    record(2, '1', 6300.5, 1e-23, 0.07, 0.09, 1.0, 0.75, 0.0)
 }
 
 #[test]
@@ -219,16 +268,190 @@ fn hapi_without_extras_and_bad_headers() {
     ));
 }
 
+#[test]
+fn crlf_endings_and_blank_lines_are_accepted() {
+    let dir = tmp("crlf");
+    let a = good();
+    let b = record(2, '1', 6301.0, 1e-23, 0.07, 0.09, 1.0, 0.75, 0.0);
+    // CRLF endings, an empty line, a whitespace-only line, and a final lone CR.
+    let text = format!("{a}\r\n\r\n\n   \t\r\n{b}\r\n\r");
+    assert_eq!(read_par_text(&dir, text).unwrap().len(), 2);
+    let text = format!("\n\n{a}\n\n\n{b}");
+    assert_eq!(read_par_text(&dir, text).unwrap().len(), 2);
+}
+
+#[test]
+fn cr_only_endings_are_parse_errors() {
+    let dir = tmp("cr");
+    let (line, message) = parse_error(read_par_text(&dir, format!("{}\r{}\r", good(), good())));
+    assert_eq!(line, 1);
+    assert!(message.contains("carriage return"), "{message}");
+    let text = format!("{}\n{}\r{}\n", good(), good(), good());
+    assert_eq!(parse_error(read_par_text(&dir, text)).0, 2);
+}
+
+#[test]
+fn non_ascii_records_are_parse_errors_with_line_numbers() {
+    let dir = tmp("ascii");
+    let mut bad = good();
+    bad.replace_range(150..152, "é");
+    let (line, message) = parse_error(read_par_text(&dir, format!("{}\n\n{bad}\n", good())));
+    assert_eq!(line, 3);
+    assert!(message.contains("non-ASCII"), "{message}");
+    // Not UTF-8 either.
+    let mut bytes = format!("{}\n", good()).into_bytes();
+    bytes.extend_from_slice(&[0xff; 160]);
+    assert_eq!(parse_error(read_par_text(&dir, bytes)).0, 2);
+}
+
+#[test]
+fn negative_intensities_and_widths_are_parse_errors_with_line_numbers() {
+    let dir = tmp("negative");
+    for (range, text, field) in [
+        (15..25, "-1.000E-23", "s_ref"),
+        (35..40, "-.010", "gamma_air"),
+        (40..45, "-0.01", "gamma_self"),
+    ] {
+        let mut bad = good();
+        bad.replace_range(range, text);
+        let (line, message) = parse_error(read_par_text(&dir, format!("{}\n{bad}\n", good())));
+        assert_eq!(line, 2);
+        assert!(
+            message.contains(&format!("{field} is negative")),
+            "{message}"
+        );
+    }
+}
+
+#[test]
+fn fortran_number_forms_are_accepted() {
+    let dir = tmp("fortran");
+    let mut r = good();
+    r.replace_range(15..25, "  1.234-23"); // a sign-only exponent
+    r.replace_range(45..55, "  1.2345D2"); // a D exponent
+    r.replace_range(59..67, "-4.50d-3");
+    let lines = read_par_text(&dir, r).unwrap();
+    assert_eq!(lines.value(LineField::SRef, 0), 1.234e-23);
+    assert_eq!(lines.value(LineField::ELower, 0), 123.45);
+    assert_eq!(lines.value(LineField::DeltaAir, 0), -4.5e-3);
+    for not_finite in ["       nan", "       inf", "   1.0D400"] {
+        let mut r = good();
+        r.replace_range(15..25, not_finite);
+        let (_, message) = parse_error(read_par_text(&dir, r));
+        assert!(message.starts_with("s_ref: cannot parse"), "{message}");
+    }
+}
+
+#[test]
+fn hapi_missing_data_is_an_io_error() {
+    let dir = tmp("nodata");
+    std::fs::write(dir.join("X.header"), hapi_header(&[])).unwrap();
+    let err = read_hapi(&dir, "X").unwrap_err();
+    match err {
+        Error::Io { path, kind, .. } => {
+            assert_eq!(kind, std::io::ErrorKind::NotFound);
+            assert!(path.ends_with("X.data"), "{path}");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn hapi_extra_separator_defaults_to_comma() {
+    let dir = tmp("separator");
+    let header = hapi_header(&["n_self"]).replace(", \"extra_separator\": \",\"", "");
+    assert!(!header.contains("extra_separator"));
+    std::fs::write(dir.join("X.header"), header).unwrap();
+    std::fs::write(dir.join("X.data"), format!("{},0.61\n", good())).unwrap();
+    assert_eq!(
+        read_hapi(&dir, "X").unwrap().value(LineField::NSelf, 0),
+        0.61
+    );
+}
+
+#[test]
+fn hapi_non_utf8_header_is_a_parse_error() {
+    let dir = tmp("utf8");
+    std::fs::write(dir.join("X.header"), b"{\n\"order\": \xff}").unwrap();
+    std::fs::write(dir.join("X.data"), "").unwrap();
+    let (line, message) = parse_error(read_hapi(&dir, "X"));
+    assert_eq!(line, 2);
+    assert!(message.contains("UTF-8"), "{message}");
+}
+
+#[test]
+fn hapi_optional_fields_in_order_are_fixed_width_columns() {
+    // As hapi.cache2storage writes a table: the optional fields are fixed-width columns after
+    // the 160 characters, and there is no `position`.
+    let dir = tmp("storage");
+    let header = serde_json::json!({
+        "table_name": "T",
+        "order": ["molec_id", "local_iso_id", "nu", "sw", "a", "gamma_air", "gamma_self",
+            "elower", "n_air", "delta_air", "quanta", "n_self", "delta_self", "deltap_air"],
+        "format": {"molec_id": "%2d", "local_iso_id": "%1d", "nu": "%12.6f", "sw": "%10.3E",
+            "a": "%10.3E", "gamma_air": "%5.4f", "gamma_self": "%5.3f", "elower": "%10.4f",
+            "n_air": "%4.2f", "delta_air": "%8.6f", "quanta": "%93s", "n_self": "%7.4f",
+            "delta_self": "%9.6f", "deltap_air": "%10.3E"},
+    });
+    std::fs::write(dir.join("S.header"), header.to_string()).unwrap();
+    let b = record(2, '1', 6301.0, 1e-23, 0.07, 0.09, 1.0, 0.75, 0.0);
+    let data = format!(
+        "{} 0.6100-0.001500 1.500E-05\n{b}      #        #          #\n",
+        good()
+    );
+    std::fs::write(dir.join("S.data"), data).unwrap();
+    let lines = read_hapi(&dir, "S").unwrap();
+    assert_eq!(lines.column(LineField::NSelf).unwrap()[0], 0.61);
+    assert_eq!(lines.column(LineField::DeltaSelf).unwrap()[0], -0.0015);
+    assert_eq!(lines.column(LineField::DeltapAir).unwrap()[0], 1.5e-5);
+    for field in [LineField::NSelf, LineField::DeltaSelf, LineField::DeltapAir] {
+        assert!(!lines.has_value(field, 1), "{field:?}");
+    }
+}
+
+/// Whether a reader's result is one it may return for arbitrary input.
+fn acceptable(result: &absrbrs::Result<LineList>) -> bool {
+    matches!(
+        result,
+        Ok(_) | Err(Error::Parse { .. }) | Err(Error::InvalidInput(_))
+    )
+}
+
 proptest::proptest! {
     #![proptest_config(proptest::prelude::ProptestConfig::with_cases(512))]
     #[test]
     fn par_reader_never_panics(text in "(?s).{0,300}") {
         let dir = tmp("fuzz");
-        let path = dir.join("f.par");
-        std::fs::write(&path, &text).unwrap();
-        match read_hitran_par(&path) {
-            Ok(_) | Err(absrbrs::Error::Parse { .. }) | Err(absrbrs::Error::InvalidInput(_)) => {}
-            Err(e) => proptest::prop_assert!(false, "unexpected error {e}"),
+        let result = read_par_text(&dir, &text);
+        proptest::prop_assert!(acceptable(&result), "unexpected {result:?}");
+    }
+}
+
+proptest::proptest! {
+    // Each case writes three files, so fewer cases keep the test quick.
+    #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+    /// A valid record with bytes overwritten in and around its fields, then truncated or
+    /// extended, read as a `.par` record and as a HAPI record with an extra column.
+    #[test]
+    fn mutated_records_never_panic(
+        edits in proptest::collection::vec((0usize..80, 0u8..0x80), 0..8),
+        len in 0usize..200,
+        fill in 0x20u8..0x7f,
+    ) {
+        let dir = tmp("mutated");
+        let mut bytes = good().into_bytes();
+        bytes.resize(len, fill);
+        for (at, byte) in edits {
+            if let Some(b) = bytes.get_mut(at) {
+                *b = byte;
+            }
         }
+        let result = read_par_text(&dir, &bytes);
+        proptest::prop_assert!(acceptable(&result), "unexpected {result:?}");
+        std::fs::write(dir.join("H.header"), hapi_header(&["n_self"])).unwrap();
+        bytes.extend_from_slice(b",0.5\n");
+        std::fs::write(dir.join("H.data"), &bytes).unwrap();
+        let result = read_hapi(&dir, "H");
+        proptest::prop_assert!(acceptable(&result), "unexpected {result:?}");
     }
 }
