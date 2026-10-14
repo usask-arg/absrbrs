@@ -16,7 +16,14 @@ once the crate is published. Both follow the {doc}`conventions`.
    pre-release ``0.1.0-alpha.1``, for example, is ``0.1.0a1``).
 ```
 
-The package also re-exports the exceptions of {mod}`absrbrs.errors`.
+The package also re-exports the exceptions of {mod}`absrbrs.errors`, and provides {mod}`absrbrs.special`.
+
+## `absrbrs.special`
+
+```{eval-rst}
+.. automodule:: absrbrs.special
+   :members:
+```
 
 ## `absrbrs.errors`
 

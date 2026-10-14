@@ -7,11 +7,14 @@
 use pyo3::prelude::*;
 
 mod errors;
+mod special;
 mod testing;
 
 #[pymodule]
 fn _absrbrs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add_function(wrap_pyfunction!(special::faddeeva_w, m)?)?;
+    m.add_function(wrap_pyfunction!(special::voigt_kernel, m)?)?;
     testing::register(m)?;
     Ok(())
 }
