@@ -95,3 +95,40 @@ Recorded from the phase 0 task reviews.
   README links before the first crates.io publish.
 - **Error variants.** Struct-variant fields are a semver commitment (enum-level
   `#[non_exhaustive]` does not cover them); acceptable at 0.0.x, revisit before 0.1.0.
+
+## Licence gates
+
+Outcomes of the phase 0 licence checks (Task 6). The details and sources are in
+`THIRD_PARTY.md`. Every row there awaits confirmation by a named maintainer.
+
+- **Faddeeva Package (phase 1a): conditions.** It is MIT-licensed, so the Accurate-tier port
+  may proceed. The ported Rust file must carry the "Copyright (c) 2012 Massachusetts Institute
+  of Technology" notice and the MIT permission notice in its header. Port from `Faddeeva.cc`
+  only (SHA-256 recorded in `THIRD_PARTY.md`), never from the ACM Algorithm 916 or Poppe–Wijers
+  code.
+- **TIPS-2021 (phase 1b): conditions.** The Zenodo record (10.5281/zenodo.4708099) is
+  MIT-licensed, and HAPI already redistributes the tables under MIT. The built-in tables may
+  therefore be committed, and the spec §5.5 fallback (user-supplied tables plus a HAPI-based
+  builder) is not required. Obligations: ship the copyright notice (Robert Gamache, 2021) and
+  the MIT permission notice with the embedded data, in both the crate and the wheel; cite
+  Gamache et al. (2021); and generate the tables with a script from the Zenodo files, recording
+  their hashes. The `.QTpy` files are Python pickles. Convert them once, offline, after
+  checking their hashes, and never unpickle anything at runtime. Open point: the paper's
+  data-availability statement could not be read (ScienceDirect refused automated access), so a
+  maintainer should confirm that it does not add terms.
+- **HITRAN line data (phase 1b): blocked.** HITRAN states no licence or terms of use. It is
+  free of charge and asks for citation, but does not address redistribution, so it counts as
+  all rights reserved. The loader golden tests use synthetic `.par` records instead of HITRAN
+  snippets (this replaces spec §8.6). The synthetic records must exercise the same fields and
+  edge cases. To unblock: an explicit licence or written permission from the HITRAN team.
+- **HAPI: cleared** as an optional, user-installed dependency and as a development comparison.
+  No HAPI code is copied.
+- **sasktran2 J-pole constants: conditions.** They are prototype-only and not shipped. Keep the
+  provenance comment in the prototype.
+- **Weideman (1994): cleared.** It is a published method, implemented independently. Cite the
+  paper.
+- **python-flint and FLINT: cleared.** They are development tools only; FLINT is
+  LGPL-3.0-or-later and must never be linked or shipped.
+- **Aside.** TIPS-2025 (for HITRAN2024; Zenodo 10.5281/zenodo.17191976) is CC-BY-4.0 according
+  to its Zenodo record. If phase 1b would rather use it than TIPS-2021, check it and register it
+  first.
