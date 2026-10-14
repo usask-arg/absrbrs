@@ -73,3 +73,14 @@ saves the `hypot` only where r is not used.
   dependency chain; a smaller N, if the 1e-6 and 1e-5 error bounds still hold (re-validate);
   or routing |z| ≲ 5 to Accurate. Occupancy is 0 to 0.47% in these windows (at most about 5% of
   line time), but it matters for densely sampled broad lines.
+
+## Before the first release
+
+- Notices for statically linked Rust crates. The wheel statically links the Rust crates that
+  `absrbrs-py` and `absrbrs` depend on: pyo3, rust-numpy (BSD-2-Clause), ndarray, matrixmultiply,
+  num-integer, rawpointer, rustc-hash and portable-atomic-util (MIT or Apache-2.0), num-complex,
+  thiserror, and the rest of the lockfile's runtime tree. Their licences require reproducing the
+  copyright and permission notices in binary redistributions. Before the first wheel is published,
+  add a generated notice file for the bundled crates (for example with `cargo-about`), list it in
+  `pyproject.toml` `license-files`, and add a paragraph to `THIRD_PARTY.md`; or record an explicit
+  decision not to.

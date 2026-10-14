@@ -3,7 +3,7 @@
 
 use absrbrs::faddeeva::{self, Complex64, Tier};
 use numpy::{IntoPyArray, PyArray1, PyArrayMethods};
-use pyo3::exceptions::PyBufferError;
+use pyo3::exceptions::{PyBufferError, PyMemoryError};
 use pyo3::prelude::*;
 
 use crate::errors::to_pyerr;
@@ -19,6 +19,15 @@ fn tier(py: Python<'_>, name: &str) -> PyResult<Tier> {
             )),
         )),
     }
+}
+
+/// An empty vector with room for `len` values, or `MemoryError` (spec §9.2: fallible allocation).
+fn reserved<T>(len: usize, what: &str) -> PyResult<Vec<T>> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len).map_err(|e| {
+        PyMemoryError::new_err(format!("cannot allocate {len} values for {what}: {e}"))
+    })?;
+    Ok(v)
 }
 
 fn invalid(py: Python<'_>, message: String) -> PyErr {
@@ -41,16 +50,24 @@ pub fn faddeeva_w<'py>(
         .try_readonly()
         .map_err(|e| PyBufferError::new_err(e.to_string()))?;
     let z = z.as_slice()?;
-    if let Some(bad) = z
-        .iter()
-        .find(|z| !(z.im >= 0.0 && z.re.is_finite() && z.im.is_finite()))
-    {
-        return Err(invalid(
-            py,
-            format!("Im z must be >= 0 and z finite, got {bad}"),
-        ));
+    let mut w = reserved(z.len(), "w")?;
+    let mut dw = reserved(z.len(), "dw")?;
+    // Validation and evaluation share one pass, without the GIL; the first invalid point stops it.
+    let first_invalid = py.detach(|| {
+        for (i, &z) in z.iter().enumerate() {
+            if !(z.im >= 0.0 && z.re.is_finite() && z.im.is_finite()) {
+                return Some(i);
+            }
+            let (value, derivative) = faddeeva::w(z, tier);
+            w.push(value);
+            dw.push(derivative);
+        }
+        None
+    });
+    if let Some(i) = first_invalid {
+        let message = format!("z[{i}] = {}: Im z must be >= 0 and z finite", z[i]);
+        return Err(invalid(py, message));
     }
-    let (w, dw): (Vec<_>, Vec<_>) = py.detach(|| z.iter().map(|&z| faddeeva::w(z, tier)).unzip());
     Ok((w.into_pyarray(py), dw.into_pyarray(py)))
 }
 
@@ -81,25 +98,28 @@ pub fn voigt_kernel<'py>(
             format!("x and y have {} and {} values", x.len(), y.len()),
         ));
     }
-    if let Some((a, b)) = x
-        .iter()
-        .zip(y)
-        .find(|(a, b)| !(a.is_finite() && b.is_finite() && **b >= 0.0))
-    {
-        return Err(invalid(
-            py,
-            format!("y must be >= 0 and x, y finite, got x = {a}, y = {b}"),
-        ));
-    }
-    let (k, (k_x, k_y)): (Vec<_>, (Vec<_>, Vec<_>)) = py.detach(|| {
-        x.iter()
-            .zip(y)
-            .map(|(&x, &y)| {
-                let t = faddeeva::kernel(x, y, tier);
-                (t.k, (t.k_x, t.k_y))
-            })
-            .unzip()
+    let mut k = reserved(x.len(), "K")?;
+    let mut k_x = reserved(x.len(), "K_x")?;
+    let mut k_y = reserved(x.len(), "K_y")?;
+    let first_invalid = py.detach(|| {
+        for (i, (&x, &y)) in x.iter().zip(y).enumerate() {
+            if !(x.is_finite() && y.is_finite() && y >= 0.0) {
+                return Some(i);
+            }
+            let t = faddeeva::kernel(x, y, tier);
+            k.push(t.k);
+            k_x.push(t.k_x);
+            k_y.push(t.k_y);
+        }
+        None
     });
+    if let Some(i) = first_invalid {
+        let message = format!(
+            "x[{i}] = {}, y[{i}] = {}: y must be >= 0 and x, y finite",
+            x[i], y[i]
+        );
+        return Err(invalid(py, message));
+    }
     Ok((
         k.into_pyarray(py),
         k_x.into_pyarray(py),
