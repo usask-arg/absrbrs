@@ -3566,7 +3566,8 @@ fixed-accuracy approximation's absolute error swamps it.
 ```
 
 The full report, with every region's bounds, is
-`docs/validation/data/faddeeva_prototype.json`. Regenerate both files with
+`docs/validation/data/faddeeva_prototype.json`. It is strict JSON, so `null` stands for an
+unbounded region limit, or for an error that is infinite (a NaN somewhere). Regenerate both files with
 
 ```bash
 uv run --directory prototypes/faddeeva python -m faddeeva_prototype report
