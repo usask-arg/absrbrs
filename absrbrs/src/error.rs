@@ -1,4 +1,9 @@
 //! Error type shared by every absrbrs computation (spec §7.4).
+//!
+//! [`Error`] is `Clone` and `PartialEq` so that results can be compared in tests and stored
+//! freely. It therefore holds only owned, comparable data: an I/O failure keeps its
+//! [`std::io::ErrorKind`] and message rather than the `std::io::Error` itself, and no variant
+//! carries a `source()` chain.
 
 /// Errors returned by absrbrs.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -18,20 +23,22 @@ pub enum Error {
     },
     /// A temperature is outside the range of a partition-function table.
     #[error(
-        "temperature {temperature} K is outside the partition-function table of molecule \
+        "temperature {temperature:?} K is outside the partition-function table of molecule \
          {molecule}, isotopologue {isotopologue}"
     )]
     OutsideTable {
         /// HITRAN molecule number.
         molecule: u16,
-        /// HITRAN isotopologue number.
+        /// HITRAN isotopologue number (codes 0, A and B are 10, 11 and 12).
         isotopologue: u16,
         /// The temperature requested, in K.
         temperature: f64,
     },
     /// A record of a line file is malformed.
-    #[error("line {line_number}: {message}")]
+    #[error("{path}, line {line_number}: {message}")]
     Parse {
+        /// The file, as given, or a description such as `<string>` for input from memory.
+        path: String,
         /// One-based line number of the record in its file.
         line_number: usize,
         /// What is wrong with the record.
@@ -42,6 +49,8 @@ pub enum Error {
     Io {
         /// The path, as given.
         path: String,
+        /// The kind of failure, which tells a missing file from other failures.
+        kind: std::io::ErrorKind,
         /// The operating system's description of the failure.
         message: String,
     },
@@ -80,19 +89,38 @@ mod tests {
         );
         assert_eq!(
             Error::Parse {
+                path: "CO2.par".into(),
                 line_number: 17,
                 message: "bad width".into()
             }
             .to_string(),
-            "line 17: bad width"
+            "CO2.par, line 17: bad width"
         );
         assert_eq!(
             Error::Io {
                 path: "CO2.par".into(),
+                kind: std::io::ErrorKind::NotFound,
                 message: "No such file".into()
             }
             .to_string(),
             "cannot read CO2.par: No such file"
         );
+    }
+
+    #[test]
+    fn extreme_temperatures_print_compactly() {
+        let message = Error::OutsideTable {
+            molecule: 1,
+            isotopologue: 1,
+            temperature: 1e300,
+        }
+        .to_string();
+        assert!(message.starts_with("temperature 1e300 K "), "{message}");
+    }
+
+    #[test]
+    fn error_is_send_sync_and_static() {
+        fn check<T: Send + Sync + 'static>() {}
+        check::<Error>();
     }
 }
