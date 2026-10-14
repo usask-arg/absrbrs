@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^reference/data/
+      - id: end-of-file-fixer
+        exclude: ^reference/data/
+      - id: check-yaml
+      - id: check-toml
+  - repo: local
+    hooks:
+      # The ruff that uv.lock pins, which CI runs too; --only-group dev does not build absrbrs.
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --locked --only-group dev ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --locked --only-group dev ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, markdown]
+        require_serial: true
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false

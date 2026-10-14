@@ -1,0 +1,22 @@
+[package]
+name = "absrbrs"
+description = "Molecular absorption cross sections with first-class linearization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["spectroscopy", "absorption", "hitran", "voigt", "atmosphere"]
+categories = ["science", "mathematics"]
+# The integration tests read the Arb reference data in ../reference/data, which is outside the
+# package, so they are not published. (LICENSE is a copy of the repository's, for the package.)
+exclude = ["/tests/"]
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+# float_roundtrip makes f64 parsing correctly rounded; without it, reference values can be 1 ulp off.
+serde_json = { version = "1", features = ["float_roundtrip"] }

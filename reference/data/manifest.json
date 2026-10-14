@@ -1,0 +1,13 @@
+{
+  "files": {
+    "faddeeva.jsonl": {
+      "flint": "3.6.0",
+      "generator": "faddeeva",
+      "precision_bits": 256,
+      "python_flint": "0.9.0",
+      "records": 74,
+      "sha256": "cb14d4a72be80ea00db2796f28ab6854c2de617fe685d9257507ad59e2196316"
+    }
+  },
+  "format_version": 2
+}

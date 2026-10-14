@@ -1,0 +1,59 @@
+version: 2
+# One grouped pull request per ecosystem and week, for releases at least a week old (a new
+# release that turns out to be broken or malicious is usually yanked within days).
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      cargo:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ["*"]
+  # python-flint is pinned exactly: a new version needs the reference data regenerated.
+  - package-ecosystem: uv
+    directory: "/reference"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    # Never bumped automatically: a new python-flint needs a deliberate regeneration.
+    ignore:
+      - dependency-name: python-flint
+    groups:
+      reference:
+        patterns: ["*"]
+  # The phase 0 Faddeeva prototype (python-flint is pinned there too).
+  - package-ecosystem: uv
+    directory: "/prototypes/faddeeva"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    # A frozen phase 0 study: security updates only (no version-update pull requests), and
+    # python-flint is never bumped automatically.
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: python-flint
+    groups:
+      prototype:
+        patterns: ["*"]

@@ -4,6 +4,8 @@
 - **Status:** approved design, pre-implementation
 - **Scope of this spec:** the overall architecture and roadmap, plus the full design of phase 1 (line-by-line Voigt cross sections with Jacobians)
 
+**Later decisions.** Decisions taken after 2026-10-14 are recorded in `docs/plans/phase-0-followups.md`, which supersedes this spec where they differ: §5.5 (TIPS table grid and the comparison with HAPI), §6.1 (the kernel returns K, K_x and K_y; in the Taylor region these are the formula's partial derivatives), §6.3 (the Fast-tier algorithm is chosen) and §8.6 (HITRAN snippets are blocked; loader tests use synthetic records).
+
 ## 1. Purpose
 
 absrbrs is a Rust library with a Python interface for molecular absorption cross sections.
@@ -247,7 +249,7 @@ The key closed forms, with u = c₂ν₀/T:
 - **Parsing rules:**
   - isotopologue codes 0, A and B map to 10, 11 and 12, as in sasktran2;
   - records with S = 0 are skipped;
-  - a malformed record produces `Parse { line_number, message }` and never a panic.
+  - a malformed record produces `Parse { path, line_number, message }` and never a panic.
 - **Construction from arrays.** Lines can also be built directly from arrays (`LineList::from_columns`). A modified copy with a replaced column can be made cheaply, which is how an optimizer perturbs line parameters.
 
 ## 6. Faddeeva kernel and profile layer
@@ -357,8 +359,8 @@ lbl.cross_section_vjp(&grid, &conditions, grad, &mut line_grad, pool)?;     // a
 | `InvalidInput(String)` | the grid is not strictly increasing; T ≤ 0; p < 0; VMR is outside [0, 1]; an input is NaN or infinite; a buffer shape is wrong; an output size exceeds its limit |
 | `MissingPartitionFunction { molecule, isotopologue }` | an isotopologue has no partition function |
 | `OutsideTable { molecule, isotopologue, temperature }` | T is outside the partition-function table |
-| `Parse { line_number, message }` | a line-file record is malformed |
-| `Io(…)` | a file cannot be read |
+| `Parse { path, line_number, message }` | a line-file record is malformed |
+| `Io { path, kind, message }` | a file cannot be read; `kind` is the `std::io::ErrorKind`, so a missing file can be told from other failures |
 
 ## 8. Validation
 
@@ -454,7 +456,9 @@ xs.to_xarray()       # requires the optional xarray extra
 - **Exceptions:**
   - `AbsrbrsError` is the base class;
   - `InvalidInputError` subclasses both `AbsrbrsError` and `ValueError`;
-  - `ParseError`, `MissingPartitionFunctionError` and `OutsideTableError` subclass `AbsrbrsError`.
+  - `ParseError` and `OutsideTableError` subclass both `AbsrbrsError` and `ValueError`;
+  - `MissingPartitionFunctionError` subclasses both `AbsrbrsError` and `LookupError`;
+  - a file that cannot be read raises the built-in `FileNotFoundError`, `PermissionError` or `OSError`, chosen by the `std::io::ErrorKind` of `Error::Io`.
 - The extension has hand-written `.pyi` stubs and ships `py.typed`. CI checks them with `mypy.stubtest`.
 
 ### 9.3 Packaging
