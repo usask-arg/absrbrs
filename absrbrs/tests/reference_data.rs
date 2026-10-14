@@ -28,7 +28,9 @@ fn faddeeva_file_covers_the_spec_grid() {
         }
     }
     let y: Vec<f64> = records.iter().map(|r| r.input_f64("y")).collect();
+    assert!(y.windows(2).all(|p| p[0] < p[1]));
     assert_eq!((y[0], y[1], y[73]), (0.0, 1e-30, 1e6));
+    assert_eq!(find(&records, "y=1.0").input_f64("y"), 1.0);
 }
 
 #[test]

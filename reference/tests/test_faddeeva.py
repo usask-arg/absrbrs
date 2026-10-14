@@ -21,6 +21,30 @@ def test_known_values():
     assert close(w.imag, 0.6071577058413937)  # (2/√π) D(1), D Dawson's integral
 
 
+def test_off_axis_value():
+    w, _, _ = faddeeva.w_and_derivative(1.0, 1.0)
+    assert close(w.real, 0.3047442052569126)
+    assert close(w.imag, 0.20821893820283163)
+
+
+def test_far_corners_match_the_asymptotic_series():
+    # Independent of Arb's erfc: w ≈ (i/(√π z)) Σₖ (2k−1)!!/(2z²)ᵏ for large |z|. At
+    # (1e8, 1e-30) Re w is the Lorentz tail, about 1e-38 of |w|, and is checked relative to itself.
+    for x, y in [(1e8, 1e-30), (1e8, 1e6), (0.0, 1e6), (1e8, 0.0)]:
+        w, dw, _ = faddeeva.w_and_derivative(x, y)
+        with ctx.workprec(512):
+            z = acb(x, y)
+            terms = [acb(1)]
+            for k in range(1, 8):
+                terms.append(terms[-1] * (2 * k - 1) / (2 * z * z))
+            series = acb(0, 1) / (arb.pi().sqrt() * z) * sum(terms)
+            dseries = -2 * z * series + 2 * acb(0, 1) / arb.pi().sqrt()
+            if y > 0:
+                assert abs(series.real - w.real) <= abs(w.real) * arb(2) ** -70
+            assert abs(series.imag - w.imag) <= abs(w) * arb(2) ** -70
+            assert abs(dseries - dw) <= abs(dw) * arb(2) ** -70
+
+
 def test_w_is_real_on_the_imaginary_axis():
     w, dw, _ = faddeeva.w_and_derivative(0.0, 2.0)
     assert w.imag == 0 and dw.real == 0
@@ -45,6 +69,13 @@ def test_grid():
     assert xs[0] == 0.0 and xs[-1] == 1e8 and 1e-8 in xs and 30.0 in xs
     assert len(ys) == 74
     assert ys[0] == 0.0 and ys[1] == 1e-30 and ys[-1] == 1e6
+
+
+def test_whole_grid_needs_at_most_256_bits():
+    # A precision regression (a point needing far more bits) would show here first.
+    precision, records = faddeeva.generate()
+    assert precision <= 256
+    assert len(records) == 74
 
 
 def test_record_layout():

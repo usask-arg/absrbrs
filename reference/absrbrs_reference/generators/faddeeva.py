@@ -2,11 +2,15 @@
 
 One record per y value (case ``y=<repr(y)>``): inputs ``x`` (doubles ≥ 0, increasing) and ``y``
 (a double ≥ 0); outputs ``w_re``, ``w_im``, ``dw_re`` and ``dw_im`` at each x. Negative x follow
-from w(−x + iy) = conj(w(x + iy)) and are not stored.
+from the symmetries w(−x + iy) = conj(w(x + iy)) and w′(−x + iy) = −conj(w′(x + iy)) (so Re w
+and Im w′ are even in x, Im w and Re w′ odd) and are not stored.
 
 w′(z) = −2z w(z) + 2i/√π is formed in Arb, where the cancellation this identity suffers in
 floating point (about |z|² relative) only costs working precision. Each point is recomputed
-at doubling precision until every stored component is known to 2^-80 relative (``TARGET_BITS``).
+at doubling precision until every stored component is known to 2^-80 (``TARGET_BITS``) relative
+to the scales of the spec §6.2 metrics: Re w relative to itself, Im w relative to |w|, and both
+parts of w′ relative to |w′|. Values below the double range (Re w at y = 0, x ≥ 27) are stored
+as subnormals or 0, with an absolute ``err``.
 At x = 0, w(iy) is real, so Im w and Re w′ are exactly zero; they are stored as exact zeros.
 
 The grid (spec §6.2): x ∈ {0, 0.5, …, 30} or {10^(k/4) : |k| ≤ 32}, 1e-8 to 1e8; y ∈ {0} or

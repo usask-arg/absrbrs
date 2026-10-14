@@ -1,1 +1,3 @@
 reference/data/** text eol=lf
+# One line of faddeeva.jsonl is about 55 KB: keep regenerations out of diffs and reviews.
+reference/data/*.jsonl -diff linguist-generated=true
