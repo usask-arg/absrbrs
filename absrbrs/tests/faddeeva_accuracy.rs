@@ -81,9 +81,25 @@ fn negative_x_follows_the_symmetries_exactly() {
 
 #[test]
 fn negative_or_nan_y_gives_nan() {
-    for z in [Complex64::new(1.0, -1e-300), Complex64::new(1.0, f64::NAN)] {
+    for z in [
+        Complex64::new(1.0, -1e-300),
+        Complex64::new(1.0, f64::NAN),
+        Complex64::new(1.0, f64::NEG_INFINITY),
+    ] {
         let (w, dw) = faddeeva::w(z, Tier::Accurate);
         assert!(w.re.is_nan() && w.im.is_nan() && dw.re.is_nan() && dw.im.is_nan());
+    }
+}
+
+#[test]
+fn negative_zero_y_is_accepted_and_equals_positive_zero() {
+    for x in [0.5, 30.0] {
+        let (w, dw) = faddeeva::w(Complex64::new(x, 0.0), Tier::Accurate);
+        let (wn, dwn) = faddeeva::w(Complex64::new(x, -0.0), Tier::Accurate);
+        let bits = |c: Complex64| (c.re.to_bits(), c.im.to_bits());
+        assert!(w.re.is_finite() && w.im.is_finite() && dw.re.is_finite() && dw.im.is_finite());
+        assert_eq!(bits(wn), bits(w), "w at x = {x}");
+        assert_eq!(bits(dwn), bits(dw), "w′ at x = {x}");
     }
 }
 

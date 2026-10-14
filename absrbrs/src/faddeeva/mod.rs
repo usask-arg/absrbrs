@@ -19,8 +19,9 @@ pub(crate) const FRAC_1_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Tier {
-    /// Value error ≤ 2e-13 relative to Re w; derivative error ≤ 2e-12 relative to |w′|. A port of
-    /// the Faddeeva Package.
+    /// Value error ≤ 2e-13 relative to Re w; derivative error ≤ 2e-12 relative to |w′|. Value
+    /// ported from the Faddeeva Package; derivative absrbrs's own. Error bounds hold over the
+    /// validated domain (y ≤ 10⁶, |x| ≤ 10⁸).
     Accurate,
 }
 
@@ -36,6 +37,8 @@ pub struct Kernel {
 }
 
 /// w(z) and its derivative w′(z), for Im z ≥ 0.
+///
+/// For Im z < 0 or NaN, both results are NaN.
 pub fn w(z: Complex64, tier: Tier) -> (Complex64, Complex64) {
     if z.im.is_nan() || z.im < 0.0 {
         let nan = Complex64::new(f64::NAN, f64::NAN);
@@ -58,6 +61,8 @@ pub fn w(z: Complex64, tier: Tier) -> (Complex64, Complex64) {
 }
 
 /// The kernel triplet at x + iy, for y ≥ 0.
+///
+/// For y < 0 or NaN, all three components are NaN.
 pub fn kernel(x: f64, y: f64, tier: Tier) -> Kernel {
     let (w, dw) = w(Complex64::new(x, y), tier);
     Kernel {
@@ -68,8 +73,9 @@ pub fn kernel(x: f64, y: f64, tier: Tier) -> Kernel {
 }
 
 /// The kernel triplet at every x of `x` for one y, into `k`, `k_x` and `k_y` (each as long as
-/// `x`). Results equal those of [`kernel`] bitwise. Returns [`Error::InvalidInput`] if the
-/// lengths differ.
+/// `x`). Each result has the accuracy of [`kernel`] (the current implementation is bitwise equal
+/// to it; a future batched implementation may differ in the last bits). For y < 0 or NaN, every
+/// output is NaN. Returns [`Error::InvalidInput`] if the lengths differ.
 pub fn kernel_into(
     x: &[f64],
     y: f64,

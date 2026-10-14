@@ -400,7 +400,9 @@ pub(crate) fn w(z: Complex64) -> Complex64 {
             loop {
                 // loop over n0+dn terms only (since n0-dn <= 0)
                 // `n0 + dn++` in the source: np uses dn before the increment and the exponent
-                // after it, as there.
+                // after it, as there. This loop is unreachable on the machine-precision path: x >= 10
+                // gives n0 >= 19, and the first loop converges by dn <= 13 (confirmed by
+                // instrumentation over 48M calls), so the source's index mismatch has no effect.
                 let np = n0 + f64::from(dn);
                 dn += 1;
                 let tp = f64::exp(-sqr(a * f64::from(dn) + dx)) / (a2 * (np * np) + y * y);

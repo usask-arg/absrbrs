@@ -31,7 +31,8 @@ pub(crate) fn laplace_cf(z: Complex64, depth: u32) -> (Complex64, Complex64) {
 pub(crate) fn gauss_cf(z: Complex64, depth: u32) -> (Complex64, Complex64) {
     let g = (-(z * z)).exp();
     let (w, dw) = laplace_cf(z, depth);
-    (w + g, dw - 2.0 * z * g)
+    // z·g first: for |x| ≥ 2^1023, 2z overflows while g underflows to 0, and (2z)·g is ∞·0 = NaN.
+    (w + g, dw - 2.0 * (z * g))
 }
 
 #[cfg(test)]
@@ -64,5 +65,12 @@ mod tests {
             let dw = gauss_cf(z, depth).1;
             assert!((fd - dw).norm() <= 1e-8 * dw.norm());
         }
+    }
+
+    /// The derivative stays finite where 2z overflows and exp(−z²) underflows.
+    #[test]
+    fn gauss_cf_derivative_is_finite_for_huge_x() {
+        let dw = gauss_cf(Complex64::new(1e308, 0.0), 16).1;
+        assert!(dw.re.is_finite() && dw.im.is_finite(), "{dw}");
     }
 }
