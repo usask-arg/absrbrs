@@ -26,8 +26,29 @@ Complex = NDArray[np.complex128]
 INV_SQRT_PI = 0.5641895835477562869480795
 
 # sasktran2's 8-pole J-pole constants. From sasktran2
-# (rust/sasktran2-rs/src/math/errorfunctions/optimized.rs): Copyright (c) 2024 University of
-# Saskatchewan Atmospheric Research Group, MIT licence.
+# (rust/sasktran2-rs/src/math/errorfunctions/optimized.rs), under its licence:
+#
+# MIT License
+#
+# Copyright (c) 2024 University of Saskatchewan Atmospheric Research Group
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of
+# this software and associated documentation files (the "Software"), to deal in
+# the Software without restriction, including without limitation the rights to
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+# of the Software, and to permit persons to whom the Software is furnished to do
+# so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 _JPOLE_B = np.array(
     [
         0.00383968430671409 - 0.0119854387180615j,

@@ -2,6 +2,31 @@
 //! of representative line windows (the phase 0 workload: O₂ A-band and CO₂ 1.6 µm lines at the
 //! surface, near 30 km and near 65 km, 0.005 cm⁻¹ grid, 25 cm⁻¹ window), against sasktran2's
 //! 8-pole J-pole approximation.
+//!
+//! The 8-pole J-pole baseline below is sasktran2's, copied here for comparison only. It is
+//! licensed as follows:
+//!
+//! MIT License
+//!
+//! Copyright (c) 2024 University of Saskatchewan Atmospheric Research Group
+//!
+//! Permission is hereby granted, free of charge, to any person obtaining a copy of
+//! this software and associated documentation files (the “Software”), to deal in
+//! the Software without restriction, including without limitation the rights to
+//! use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+//! of the Software, and to permit persons to whom the Software is furnished to do
+//! so, subject to the following conditions:
+//!
+//! The above copyright notice and this permission notice shall be included in all
+//! copies or substantial portions of the Software.
+//!
+//! THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//! SOFTWARE.
 
 use std::hint::black_box;
 
@@ -24,8 +49,11 @@ const JPOLE_C: [Complex64; 4] = [
 ];
 const FRAC_1_SQRT_PI: f64 = 0.564_189_583_547_756_3;
 
-/// The J-pole kernel triplet (sasktran2 computes the value and derivative this way). The other
-/// four poles are −conj of these, with conj coefficients.
+/// The J-pole kernel triplet: the same 8-pole sum as sasktran2's, evaluated in plain complex
+/// arithmetic. The other four poles are −conj of these, with conj coefficients. sasktran2's own
+/// derivative path precomputes per-line pole-pair coefficients and uses f64x8 SIMD under its
+/// nightly-only feature, which this baseline does not represent (a scalar pole-paired version
+/// measured 12.9 ns per point against this one's 13.4 ns).
 fn jpole_kernel(x: f64, y: f64) -> (f64, f64, f64) {
     let z = Complex64::new(x, y);
     let (mut s, mut ds) = (Complex64::new(0.0, 0.0), Complex64::new(0.0, 0.0));
@@ -107,7 +135,8 @@ fn bench_lines(c: &mut Criterion) {
             for (tier_name, tier) in [("fast", Tier::Fast), ("accurate", Tier::Accurate)] {
                 group.bench_function(format!("{tier_name}/{line}_{cond}"), |b| {
                     b.iter(|| {
-                        kernel_into(black_box(&x), y, tier, &mut k, &mut kx, &mut ky).unwrap()
+                        kernel_into(black_box(&x), y, tier, &mut k, &mut kx, &mut ky).unwrap();
+                        black_box((&mut k, &mut kx, &mut ky));
                     })
                 });
             }
@@ -116,6 +145,7 @@ fn bench_lines(c: &mut Criterion) {
                     for (i, &xi) in x.iter().enumerate() {
                         (k[i], kx[i], ky[i]) = jpole_kernel(black_box(xi), y);
                     }
+                    black_box((&mut k, &mut kx, &mut ky));
                 })
             });
         }
