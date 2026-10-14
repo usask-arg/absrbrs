@@ -36,7 +36,7 @@ uv run python -m mypy.stubtest absrbrs._absrbrs
 uv run --directory reference python -m pytest
 uv run --directory reference python -m absrbrs_reference generate   # then: git status reference/data
 uv run --directory prototypes/faddeeva python -m pytest
-uv run --directory validation python -m pytest   # both Faddeeva tiers against Arb, computed now
+uv run --directory validation python -m pytest   # Faddeeva tiers against Arb; TIPS-2021 against HAPI
 uv run --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
 uvx --from actionlint-py==1.7.12.25 actionlint   # after changing .github/workflows
 ```
@@ -68,8 +68,8 @@ only to releases at least a week old.
   - the strict documentation build and the type stubs;
   - the reference generator's tests, a regeneration of every reference file, and the Faddeeva
     prototype's tests;
-  - the accuracy of both Faddeeva tiers against Arb values computed at run time
-    (`validation/`);
+  - the accuracy of both Faddeeva tiers against Arb values computed at run time, and
+    TIPS-2021 against HAPI's embedded tables at HAPI's nodes (`validation/`);
   - "All checks passed", which succeeds only if every job above did: the one check to
     require.
 - `.github/workflows/release.yml`, on pushes to `main`, tags `v*`, and pull requests that touch
@@ -91,6 +91,32 @@ pinned). Regenerate them with
 `uv run --directory reference python -m absrbrs_reference generate [--only NAME]`
 and commit the data together with the manifest. Never edit the data by hand. Tolerances in
 tests are never loosened without a written justification in the test.
+
+## Local HITRAN line data (opt-in)
+
+HITRAN line data is never committed, shipped or uploaded, including in CI artifacts, so the
+tests use synthetic records. One opt-in test reads your own HAPI caches (for example
+sasktran2's `database/hitran_lines`), checks every table and prints its line count, timing and
+skipped records:
+
+```bash
+ABSRBRS_HITRAN_LINES_DIR=/path/to/hitran_lines cargo test -p absrbrs --release --test local_hitran -- --nocapture
+```
+
+Without the variable it is skipped; CI never sets it.
+
+## Generated data (`tools/`)
+
+Two uv scripts generate committed data; run them only to regenerate it, and commit the outputs
+together:
+
+- `uv run tools/isotopologues.py` writes `absrbrs/src/lines/isotopologue_table.rs` from HAPI's
+  `hapi.ISO` (hitran-api, pinned in the script's header). Never edit the generated file.
+- `uv run tools/tips2021.py` downloads the TIPS-2021 Zenodo record, checks each file's MD5,
+  loads the `.QTpy` pickles with an unpickler that refuses all globals, cross-checks the
+  result against the record's Fortran tables, and writes `absrbrs/data/tips2021.bin` and its
+  manifest `absrbrs/data/tips2021.json`. `tests/test_data_files.py` checks the two against
+  each other.
 
 ## The Faddeeva prototype
 

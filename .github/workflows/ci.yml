@@ -238,7 +238,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-      - name: Both Faddeeva tiers against Arb (dense grid and random points)
+      - name: Both Faddeeva tiers against Arb (dense grid and random points), TIPS-2021 against HAPI
         run: uv run --locked --directory validation python -m pytest -q
 
   # The one status check to require in branch protection: it fails unless every job above

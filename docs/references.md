@@ -3,6 +3,9 @@
 - R. R. Gamache et al., "Total internal partition sums for the HITRAN2020 database,"
   *J. Quant. Spectrosc. Radiat. Transfer* **271**, 107713 (2021).
   [doi:10.1016/j.jqsrt.2021.107713](https://doi.org/10.1016/j.jqsrt.2021.107713)
+- R. R. Gamache, *TIPS_2021, Total Internal Partition Sums for Molecules on HITRAN2020
+  database*, version 1.0, Zenodo (2021), MIT licence: the 1 K tables absrbrs embeds.
+  [doi:10.5281/zenodo.4708099](https://doi.org/10.5281/zenodo.4708099)
 - I. E. Gordon et al., "The HITRAN2020 molecular spectroscopic database,"
   *J. Quant. Spectrosc. Radiat. Transfer* **277**, 107949 (2022).
   [doi:10.1016/j.jqsrt.2021.107949](https://doi.org/10.1016/j.jqsrt.2021.107949)

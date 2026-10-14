@@ -57,16 +57,19 @@ updates:
     groups:
       prototype:
         patterns: ["*"]
-  # Arb accuracy validation of both Faddeeva tiers; python-flint is pinned exactly.
+  # Arb accuracy validation of both Faddeeva tiers, and the TIPS-2021 cross-check against HAPI;
+  # python-flint and hitran-api are pinned exactly.
   - package-ecosystem: uv
     directory: "/validation"
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
-    # python-flint is pinned exactly: a new version needs the accuracy re-checked.
+    # Pinned exactly: a new python-flint needs the accuracy re-checked, and a new hitran-api
+    # the TIPS-2021 comparison.
     ignore:
       - dependency-name: python-flint
+      - dependency-name: hitran-api
     groups:
       validation:
         patterns: ["*"]
