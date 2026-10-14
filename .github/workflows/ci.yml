@@ -1,0 +1,227 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A new push to a pull request supersedes its running checks; runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Actions are pinned to commit SHAs; Dependabot updates them. Rust caches are saved only from
+# main, so a pull request cannot write a cache that main then restores.
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust, and the big-endian target of the release wheels
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update \
+            --component clippy,rustfmt --target s390x-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      # The whole workspace, absrbrs-py included: .cargo/config.toml builds it as an extension
+      # module, which needs no Python interpreter here.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Build the libraries
+        run: cargo build --workspace --lib --locked
+      - name: Rustdoc, private items included (warnings are errors)
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc -p absrbrs --no-deps --document-private-items --locked
+      - name: Check the big-endian wheel target (32-bit platforms are not supported)
+        run: cargo check --workspace --locked --target s390x-unknown-linux-gnu
+      # As `cargo publish` does at release time: package the crate, then build it from the
+      # packaged files alone (the reference-backed tests are not published).
+      - name: Package the absrbrs crate
+        run: cargo package -p absrbrs --locked
+      # As `cargo test` on the crates.io sources would: the reference-backed integration tests
+      # are not published.
+      - name: Test the packaged crate on its own
+        run: |
+          tar -xzf target/package/absrbrs-*.crate -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"/absrbrs-*/
+          cargo test --locked
+      - name: Ruff (the locked version, without building absrbrs)
+        run: |
+          uv run --locked --only-group dev ruff check .
+          uv run --locked --only-group dev ruff format --check .
+      - name: Lint the workflows
+        run: uvx --from actionlint-py==1.7.12.25 actionlint
+
+  rust-test:
+    name: Rust tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash # on Windows too, so that the `--` reaches cargo unchanged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # absrbrs-py has no Rust tests (test = false); it is tested from Python below.
+      - name: Run the tests
+        run: cargo test --workspace --locked -- --nocapture
+
+  msrv:
+    name: Rust 1.85.0 (MSRV)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: "1.85.0" # overrides rust-toolchain.toml, for every rustc call
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust 1.85.0
+        run: rustup toolchain install 1.85.0 --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The MSRV is that of the library crates; dev-dependencies (proptest, ...) may need newer.
+      - name: Check the libraries
+        run: cargo +1.85.0 check --workspace --lib --locked
+
+  python:
+    name: Python (${{ matrix.os }}${{ matrix.numpy && format(', numpy {0}', matrix.numpy) || '' }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        numpy: [""] # the latest
+        include:
+          # The oldest numpy that pyproject.toml accepts, with Python 3.11 only: it has no
+          # wheels for 3.14. (Replacing the "" makes this an extra job.)
+          - os: ubuntu-latest
+            numpy: "1.26.*"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      # A test build: faster to compile than the release profile (fat LTO, one codegen unit).
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+      NUMPY: ${{ matrix.numpy }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build the abi3 wheel once
+        run: python -m pip wheel --no-deps --wheel-dir dist .
+      - name: Test it with Python 3.11
+        run: |
+          python -m pip install --only-binary :all: "$(ls dist/*.whl)[test]" \
+            ${NUMPY:+"numpy==$NUMPY"}
+          python -m pytest -q
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: ${{ !matrix.numpy }}
+        with:
+          python-version: "3.14"
+      - name: Test it with Python 3.14
+        if: ${{ !matrix.numpy }}
+        run: |
+          python -m pip install --only-binary :all: "$(ls dist/*.whl)[test]"
+          python -m pytest -q
+
+  docs:
+    name: Documentation and type stubs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+      # The locked Sphinx 9; -E rereads every source, -W makes every warning an error, and the
+      # examples are executed.
+      - name: Build the documentation
+        run: uv run --locked --extra docs sphinx-build -E -W --keep-going -b html docs docs/_build/html
+      - name: Check the extension's type stubs (the locked mypy)
+        run: uv run --locked --extra docs python -m mypy.stubtest absrbrs._absrbrs
+
+  reference:
+    name: Reference generator
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Run the generator's tests
+        run: uv run --locked --directory reference python -m pytest -q
+      # The scheduled workflow repeats this weekly on Linux and macOS.
+      - name: Regenerate every reference file
+        run: uv run --locked --directory reference python -m absrbrs_reference generate
+      - name: Fail on any difference from the committed data
+        run: |
+          changes=$(git status --porcelain --untracked-files=all -- reference/data)
+          if [ -n "$changes" ]; then
+            echo "::error::The regenerated reference data differ from the committed files."
+            echo "$changes"
+            git diff --stat -- reference/data
+            exit 1
+          fi
+      - name: Run the Faddeeva prototype's tests
+        run: uv run --locked --directory prototypes/faddeeva python -m pytest -q
+
+  # The one status check to require in branch protection: it fails unless every job above
+  # succeeded.
+  all-checks:
+    name: All checks passed
+    if: always()
+    needs: [lint, rust-test, msrv, python, docs, reference]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every job succeeded
+        if: >-
+          contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') ||
+          contains(needs.*.result, 'skipped')
+        run: exit 1
