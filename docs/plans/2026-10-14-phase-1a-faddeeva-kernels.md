@@ -2111,6 +2111,10 @@ w′ = −2zw + 2i/√π loses about |z|² in relative accuracy:
 | x ≥ 6 and y ≤ 0.1 | derivative of exp(−z²) + continued fraction of depth 16 |
 | \|z\| ≥ 6 otherwise | derivative of the continued fraction of depth 20 |
 
+So for |z| ≥ 6 the value (Johnson's) and the derivative come from different formulas, a
+deliberate exception to spec §6.1's "same formula": both are accurate to about 1e-13, so they
+are consistent to that level.
+
 ## Fast tier
 
 A region-switched composite, chosen by measurement in phase 0
@@ -2175,6 +2179,16 @@ Append to `docs/plans/phase-1a-followups.md`:
 ## Accuracy (validation/, Arb computed at run time)
 
 <copy docs/validation/faddeeva-accuracy-table.md here>
+
+## Decisions
+
+- **Accurate-tier derivative (spec §6.1 exception).** For |z| ≥ 6 the derivative comes from an
+  asymptotic formula (exp(−z²) + continued fraction of depth 16 near the axis, continued fraction
+  of depth 20 elsewhere) while the value is Johnson's. Both are accurate to about 1e-13, so value
+  and derivative are consistent to that level; measured on 565k Arb points: value ≤ 9.7e-14,
+  derivative ≤ 9.3e-13 (tightest: the identity just inside |z| = 6).
+- **Johnson's large-x second loop** (`np = n0 + dn++`, then `exp(-sqr(a*dn+dx))`) has an index
+  mismatch in the source, ported as written: it is unreachable on the machine-precision path.
 
 ## For phase 1c (profile layer)
 
