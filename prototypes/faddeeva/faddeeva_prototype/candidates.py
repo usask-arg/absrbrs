@@ -25,7 +25,9 @@ Complex = NDArray[np.complex128]
 
 INV_SQRT_PI = 0.5641895835477562869480795
 
-# sasktran2's 8-pole J-pole constants (rust/sasktran2-rs/src/math/errorfunctions/optimized.rs).
+# sasktran2's 8-pole J-pole constants. From sasktran2
+# (rust/sasktran2-rs/src/math/errorfunctions/optimized.rs): Copyright (c) 2024 University of
+# Saskatchewan Atmospheric Research Group, MIT licence.
 _JPOLE_B = np.array(
     [
         0.00383968430671409 - 0.0119854387180615j,

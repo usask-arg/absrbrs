@@ -103,30 +103,51 @@ Outcomes of the phase 0 licence checks (Task 6). The details and sources are in
 
 - **Faddeeva Package (phase 1a): conditions.** It is MIT-licensed, so the Accurate-tier port
   may proceed. The ported Rust file must carry the "Copyright (c) 2012 Massachusetts Institute
-  of Technology" notice and the MIT permission notice in its header. Port from `Faddeeva.cc`
-  only (SHA-256 recorded in `THIRD_PARTY.md`), never from the ACM Algorithm 916 or Poppe–Wijers
-  code.
+  of Technology" notice and the MIT permission notice in its header. Wheels contain no Rust
+  source, and `pyproject.toml` has `license-files = ["LICENSE"]`. So in the same commit as the
+  port, add a notice file inside the crate package (e.g. `absrbrs/LICENSES/Faddeeva-MIT.txt`)
+  and list it in `pyproject.toml` `license-files`. Port from `Faddeeva.cc` only (SHA-256
+  recorded in `THIRD_PARTY.md`), never from the ACM code for TOMS Algorithm 916 or 680
+  (Poppe–Wijers).
 - **TIPS-2021 (phase 1b): conditions.** The Zenodo record (10.5281/zenodo.4708099) is
-  MIT-licensed, and HAPI already redistributes the tables under MIT. The built-in tables may
-  therefore be committed, and the spec §5.5 fallback (user-supplied tables plus a HAPI-based
-  builder) is not required. Obligations: ship the copyright notice (Robert Gamache, 2021) and
-  the MIT permission notice with the embedded data, in both the crate and the wheel; cite
-  Gamache et al. (2021); and generate the tables with a script from the Zenodo files, recording
-  their hashes. The `.QTpy` files are Python pickles. Convert them once, offline, after
-  checking their hashes, and never unpickle anything at runtime. Open point: the paper's
-  data-availability statement could not be read (ScienceDirect refused automated access), so a
-  maintainer should confirm that it does not add terms.
+  MIT-licensed, the paper (section 4) says the codes all use the MIT licence, and HAPI already
+  redistributes the tables under MIT. The built-in tables may therefore be committed. The
+  HAPI-based builder is not required; user-supplied tables remain in scope (spec §5.5).
+  Obligations:
+  - Ship the copyright notice (Robert Gamache, 2021) and the MIT permission notice with the
+    embedded data. In the same commit as the data, add a notice file inside the crate package
+    (e.g. `absrbrs/LICENSES/TIPS-2021-MIT.txt`) and list it in `pyproject.toml`
+    `license-files`, so the notice reaches both the crate and the wheel.
+  - Cite Gamache et al. (2021).
+  - Generate the tables with a script, recording for each file used Zenodo's published MD5
+    and a locally computed SHA-256.
+
+  Build from the plain-text tables in `TIPS_2021.zip` (`BD_TIPS_2021.FOR`, in the same MIT
+  record); prefer this. The `.QTpy` files are third-party Python pickles, and a matching hash
+  does not make unpickling them safe. If they must be used, inspect them first with
+  `pickletools`. Then load them with a restricted `pickle.Unpickler` whose `find_class` refuses
+  all globals, or allows only the exact expected types. Never unpickle anything at runtime.
+- **TIPS grids and HAPI version (phase 1b).** HAPI 1.3.0.0's `partitionSum` defaults to
+  `version=2025` (TIPS-2025). Its embedded TIPS-2021 grid is 1, 10, 20, … K, whereas the Zenodo
+  tables use 1 K steps up to 20 K and 2 K steps above. Spec §5.5's "tabulated at 1 K steps" and
+  "equal HAPI's partitionSum exactly at nodes" need revisiting in phase 1b. Pin `version=2021`
+  and compare at HAPI's nodes.
 - **HITRAN line data (phase 1b): blocked.** HITRAN states no licence or terms of use. It is
   free of charge and asks for citation, but does not address redistribution, so it counts as
-  all rights reserved. The loader golden tests use synthetic `.par` records instead of HITRAN
-  snippets (this replaces spec §8.6). The synthetic records must exercise the same fields and
-  edge cases. To unblock: an explicit licence or written permission from the HITRAN team.
-- **HAPI: cleared** as an optional, user-installed dependency and as a development comparison.
-  No HAPI code is copied.
-- **sasktran2 J-pole constants: conditions.** They are prototype-only and not shipped. Keep the
-  provenance comment in the prototype.
-- **Weideman (1994): cleared.** It is a published method, implemented independently. Cite the
-  paper.
+  all rights reserved.
+  - Do not commit, ship or publish HITRAN records, including in CI artifacts and caches. This
+    does not cover users, or the spec §8.5 benchmark jobs, downloading HITRAN data at runtime.
+  - The loader golden tests use synthetic `.par` records instead of HITRAN snippets (this
+    replaces spec §8.6). The synthetic records must exercise the same fields and edge cases.
+  - To unblock: an explicit licence or written permission from the HITRAN team.
+- **HAPI: cleared** as an optional, user-installed dependency of the table builder (if built)
+  and as a development comparison. No HAPI code is copied.
+- **sasktran2 J-pole constants: conditions.** They are used only by the prototype, which is in
+  the repository but not in the crate or wheel. The comment above `_JPOLE_B` in
+  `candidates.py` carries the provenance and copyright notice; keep it.
+- **Weideman (1994): cleared.** The prototype follows the published algorithm, whose few-line
+  listing is the direct expression of the formula; low risk. Phase 1a derives the Rust from the
+  paper's equations. Cite the paper.
 - **python-flint and FLINT: cleared.** They are development tools only; FLINT is
   LGPL-3.0-or-later and must never be linked or shipped.
 - **Aside.** TIPS-2025 (for HITRAN2024; Zenodo 10.5281/zenodo.17191976) is CC-BY-4.0 according
