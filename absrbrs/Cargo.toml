@@ -1,0 +1,14 @@
+[package]
+name = "absrbrs"
+description = "Molecular absorption cross sections with first-class linearization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["spectroscopy", "absorption", "hitran", "voigt", "atmosphere"]
+categories = ["science", "mathematics"]
+
+[dependencies]
+thiserror.workspace = true
