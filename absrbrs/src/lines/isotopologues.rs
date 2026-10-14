@@ -4,7 +4,10 @@
 use super::isotopologue_table::ISOTOPOLOGUES;
 
 /// One isotopologue: HITRAN molecule and (local) isotopologue numbers, and its properties.
+///
+/// Only the crate's table constructs these; more fields may be added.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Isotopologue {
     /// HITRAN molecule number (1 = H₂O, 2 = CO₂, …).
     pub molecule: u16,

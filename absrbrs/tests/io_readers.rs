@@ -409,12 +409,11 @@ fn hapi_optional_fields_in_order_are_fixed_width_columns() {
     }
 }
 
-/// Whether a reader's result is one it may return for arbitrary input.
+/// Whether a reader's result is one it may return for arbitrary input: a line list or a
+/// `Parse` error (the readers check every value per record, so `from_columns`'s
+/// `InvalidInput` is unreachable).
 fn acceptable(result: &absrbrs::Result<LineList>) -> bool {
-    matches!(
-        result,
-        Ok(_) | Err(Error::Parse { .. }) | Err(Error::InvalidInput(_))
-    )
+    matches!(result, Ok(_) | Err(Error::Parse { .. }))
 }
 
 proptest::proptest! {

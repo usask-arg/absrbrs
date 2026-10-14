@@ -60,16 +60,23 @@ impl Entry {
 /// `TIPS_2021.py` gives 3010 K as the maximum for CF4 (42, 1), but its table runs, smoothly, to
 /// 5000 K, and all of it is used.
 ///
-/// Accuracy:
+/// Accuracy (the interpolation figures come from
+/// `validation/absrbrs_validation/tips_interpolation.py`, at the half-integer temperatures):
 /// - Q is stored as f32, which rounds by at most 6e-8 relative, comparable to the 6–9
 ///   significant figures of the source.
-/// - Between the nodes, from 50 K up, the interpolant matches higher-order interpolation to about
-///   1e-8 in ln Q; d ln Q/dT carries about 1e-5 relative noise from the data.
-/// - Below about 20 K, where ln Q curves sharply, errors between the nodes are 1e-2 to 2e-1.
+/// - Between the nodes, from 50 K up and more than 4 K from the kinks below, the interpolant
+///   agrees with 6-point Lagrange interpolation of ln Q to a median of 3e-8 and at most 4e-7 in
+///   ln Q; d ln Q/dT carries about 1e-5 relative noise from the data.
+/// - Below about 20 K, where ln Q curves sharply, values between the nodes are uncertain by
+///   1e-2 to 2e-1: they differ from 6-point Lagrange interpolation of ln Q by up to 1e-2, and
+///   from linear interpolation in Q by up to 0.16 (0.58 for CH3 (57, 1)).
 /// - Kinks in the source tables (SO3 (47, 1) at 650 K, HCN (23, 1) and (23, 2) at 1000 K)
-///   distort d ln Q/dT within ±1 K of them.
-/// - At non-integer temperatures the values differ from those of TIPS's own (and HAPI's)
-///   interpolation, which is linear in Q, by up to about 4e-6 relative.
+///   distort d ln Q/dT within ±1 K of them; within 4 K of them the interpolant differs from
+///   6-point Lagrange interpolation of ln Q by up to 5e-5.
+/// - At non-integer temperatures the values differ from those of `TIPS_2021.py`, which
+///   interpolates linearly in Q on the same 1 K grid, by a median of 4e-6 and at most 2.7e-5 at
+///   150–350 K, at most 6.4e-5 from 50 K, and 1.4e-4 at the SO3 kink. (HAPI interpolates
+///   differently, with 3- and 4-point Lagrange polynomials in Q on a 10 K grid.)
 pub struct Tips2021 {
     index: BTreeMap<(u16, u16), Entry>,
 }

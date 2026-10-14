@@ -34,5 +34,6 @@ All notable changes to absrbrs are recorded here. The format follows
   checked against dual numbers and Arb.
 - `absrbrs.LineList` (with `from_hitran`, `from_hapi` and `from_arrays`) and
   `absrbrs.partition.tips2021`.
-- Validation of TIPS-2021 against HAPI's embedded tables; theory pages on partition functions
-  and the line state.
+- Validation of TIPS-2021 against HAPI's embedded tables, at and between HAPI's nodes, and a
+  script measuring the interpolation figures; theory pages on partition functions and the line
+  state.

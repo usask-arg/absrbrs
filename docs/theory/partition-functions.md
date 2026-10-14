@@ -41,7 +41,9 @@ Most tables start at 1 K. Three are trimmed at the low end:
 - **H₂S 31_2 and 31_3 start at 30 K.** Their values are unphysical below that: Q(1 K) is
   negative, and the ratios Q(31_2)/Q(31_1) and Q(31_3)/Q(31_1), which should be close to the
   ratios of the nuclear-spin degeneracies (about 1 and 4), are 0.44 and 1.77 at 2 K, 1.43 and
-  5.72 at 6 K and 1.03 and 4.11 at 20 K. From 30 K they are within 0.6% of them.
+  5.72 at 6 K and 1.03 and 4.11 at 20 K. From 30 K to about 300 K they are within 0.6% of
+  them (at most 0.58% and 0.46%). Above that they drift further, to 1.5% at 1000 K and 5.5% at
+  4000 K, as expected physically: the isotopologues' rovibrational levels differ.
 - **CH₃ 57_1 starts at 2 K,** because its Q(1 K) is 0. Its low-temperature values carry few
   digits (Q(2 K) = 0.000416, about 10⁻³ relative rounding).
 
@@ -64,15 +66,27 @@ table, and gives d ln Q/dT, the quantity the Jacobians need, directly.
 
 ### Accuracy
 
+The interpolation figures below compare absrbrs at the half-integer temperatures of every
+table with two other interpolants of the same 1 K nodes: linear interpolation in Q, which is
+what the record's own `TIPS_2021.py` does, and 6-point Lagrange interpolation of ln Q, a
+higher-order interpolant whose distance from absrbrs estimates the uncertainty between the
+nodes. They are reproduced by
+`uv run --locked --directory validation python -m absrbrs_validation.tips_interpolation`.
+
 - Q is stored as f32, which rounds by at most 6 × 10⁻⁸ relative, comparable to the 6 to 9
   significant figures of the source.
-- Between the nodes, from 50 K up, the interpolant matches higher-order interpolation to about
-  10⁻⁸ in ln Q; d ln Q/dT carries about 10⁻⁵ relative noise from the data.
-- Below about 20 K, where ln Q curves sharply, errors between the nodes are 10⁻² to 2 × 10⁻¹.
+- Between the nodes, from 50 K up and more than 4 K from the kinks below, absrbrs agrees with
+  6-point Lagrange interpolation of ln Q to a median of 3 × 10⁻⁸ and at most 4 × 10⁻⁷ in ln Q;
+  d ln Q/dT carries about 10⁻⁵ relative noise from the data.
+- Below about 20 K, where ln Q curves sharply, values between the nodes are uncertain by
+  10⁻² to 2 × 10⁻¹: absrbrs differs from 6-point Lagrange interpolation of ln Q by up to
+  10⁻² (NO⁺ 36_1), and from linear interpolation in Q by up to 0.16 (0.58 for CH₃ 57_1).
 - Kinks in the source tables (SO₃ 47_1 at 650 K, HCN 23_1 and 23_2 at 1000 K) distort
-  d ln Q/dT within ±1 K of them.
-- At non-integer temperatures the values differ from those of TIPS's own (and HAPI's)
-  interpolation, which is linear in Q, by up to about 4 × 10⁻⁶ relative.
+  d ln Q/dT within ±1 K of them; within 4 K of them absrbrs differs from 6-point Lagrange
+  interpolation of ln Q by up to 5 × 10⁻⁵.
+- At non-integer temperatures absrbrs differs from `TIPS_2021.py`'s linear interpolation in Q
+  by a median of 4 × 10⁻⁶ and at most 2.7 × 10⁻⁵ (SF₆ 30_1) at 150 to 350 K, by at most
+  6.4 × 10⁻⁵ from 50 K (35_1), and by 1.4 × 10⁻⁴ at the SO₃ kink.
 
 ## User tables
 
@@ -90,14 +104,30 @@ TIPS-2021, with its 1 K grid, interpolates in T instead.
 
 ## Why HAPI's tables are not the reference
 
-HAPI (Kochanov et al. 2016) embeds TIPS-2021 at 10 K steps (1, 10, 20, … K) and interpolates
-linearly in Q between them. Measured against the 1 K source during phase 1b planning, its
-values between the nodes are off by 3 to 5 × 10⁻⁵ at atmospheric temperatures and by up to 50%
-below 20 K. So absrbrs takes the 1 K source as the reference, not HAPI's `partitionSum`.
+HAPI 1.3.0.0 (Kochanov et al. 2016) embeds TIPS-2021 at 10 K steps (1, 10, 20, … K), and
+`partitionSum(..., version=2021)` (through `BD_TIPS_2021_PYTHON` and `AtoB`) interpolates
+them with 3- and 4-point Lagrange polynomials in Q. At integer temperatures absrbrs returns the
+1 K source, so comparing the two at the integer temperatures between HAPI's nodes measures
+HAPI's error against the source (same script as above):
 
-At HAPI's own nodes the two agree to the rounding of HAPI's tables, which hold Q to 7
-significant figures. `validation/tests/test_tips.py` compares the 144 isotopologues that both
-have, at every 10 K node from 10 K to 1000 K (skipping 10 and 20 K for 31_2 and 31_3): each
-node is within half a unit in the 7th significant figure of HAPI's value plus the f32 rounding
-of absrbrs's. The largest relative difference is 5.5 × 10⁻⁷, from HAPI's rounding. HAPI
-1.3.0.0 has no TIPS-2021 table for 56_1 or 57_1.
+- up to 1.1 × 10⁻⁵ at 200 to 300 K (SF₆ 30_1, the worst of the 144 isotopologues in both);
+- under 10⁻⁶ at 150 to 350 K for the main atmospheric species (molecules 1 to 7,
+  isotopologue 1; the worst is O₃ at 9.5 × 10⁻⁷);
+- up to about 100% below 20 K (NO⁺ 36_1).
+
+So absrbrs takes the 1 K source as the reference, not HAPI's `partitionSum`.
+
+`validation/tests/test_tips.py` checks both cases for the 144 isotopologues that both have:
+
+- At HAPI's nodes, from 10 K to 1000 K (skipping 10 and 20 K for 31_2 and 31_3), the two agree
+  to the rounding of HAPI's tables, which hold Q to 7 significant figures: each node is within
+  half a unit in the 7th significant figure of HAPI's value plus the f32 rounding of absrbrs's.
+  The largest relative difference is 5.5 × 10⁻⁷, from HAPI's rounding.
+- Between HAPI's nodes, at every non-node integer temperature from 150 K to the end of HAPI's
+  table, HAPI is within 1.2 × 10⁻⁵ of the source (worst 1.1 × 10⁻⁵, SF₆ 30_1 at 265 K), except
+  within 20 K of the three kinks, where its stencil spans the slope discontinuity and the error
+  reaches 2.0 × 10⁻³ (SO₃ 47_1 at 651 K).
+
+HAPI 1.3.0.0 has no TIPS-2021 table for 56_1 or 57_1. Those two, and the 35 tables whose
+isotopologues are not in `hapi.ISO`, 37 of the 181 in all, are checked only against the
+Fortran tables.

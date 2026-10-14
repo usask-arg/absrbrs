@@ -109,6 +109,28 @@ impl LineField {
 ///
 /// Equality treats NaN entries as equal to each other, so that a value equals its clone. A
 /// `None` column and an all-NaN column are not equal, although they resolve to the same values.
+///
+/// Build it with a struct literal, leaving the optional columns out with
+/// `..Default::default()`:
+///
+/// ```
+/// use absrbrs::lines::{LineColumns, LineList};
+///
+/// let lines = LineList::from_columns(LineColumns {
+///     molecule: vec![2],
+///     isotopologue: vec![1],
+///     nu: vec![2300.0],
+///     s_ref: vec![1e-20],
+///     e_lower: vec![100.0],
+///     gamma_air: vec![0.07],
+///     gamma_self: vec![0.09],
+///     n_air: vec![0.75],
+///     delta_air: vec![-0.002],
+///     ..Default::default() // n_self, delta_self and deltap_air absent for every line
+/// })?;
+/// assert_eq!(lines.len(), 1);
+/// # Ok::<(), absrbrs::Error>(())
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct LineColumns {
     /// HITRAN molecule number of each line.

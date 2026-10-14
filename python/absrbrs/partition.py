@@ -5,9 +5,10 @@ total internal partition sum Q(T) of 181 HITRAN isotopologues at 1 K steps, from
 table's maximum (1000 to 9000 K). Three tables start higher: H2S isotopologues 2 and 3
 (molecule 31) at 30 K, and CH3 (molecule 57) at 2 K. absrbrs stores Q in single precision and
 interpolates ln Q in T with cubic Hermite polynomials, so Q and d ln Q/dT are consistent with
-each other. From 50 K up the interpolation adds about 1e-8 to the error of ln Q, and d ln Q/dT
-carries about 1e-5 relative noise from the data; below about 20 K, where ln Q curves sharply,
-values between the nodes are good to 1e-2 to 2e-1 only.
+each other. From 50 K up (away from kinks in three source tables) the interpolation adds a
+median of about 3e-8, and at most 4e-7, to the error of ln Q, and d ln Q/dT carries about 1e-5
+relative noise from the data; below about 20 K, where ln Q curves sharply, values between the
+nodes are uncertain by 1e-2 to 2e-1.
 """
 
 from __future__ import annotations

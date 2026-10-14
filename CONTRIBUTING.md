@@ -118,6 +118,10 @@ together:
   manifest `absrbrs/data/tips2021.json`. `tests/test_data_files.py` checks the two against
   each other.
 
+The interpolation figures quoted for TIPS-2021 (in `docs/theory/partition-functions.md` and the
+`Tips2021` rustdoc) are printed by
+`uv run --locked --directory validation python -m absrbrs_validation.tips_interpolation`.
+
 ## The Faddeeva prototype
 
 `prototypes/faddeeva/` is the phase 0 study that chose the Fast-tier algorithm. Its report is

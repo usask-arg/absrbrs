@@ -222,7 +222,7 @@ jobs:
         run: uv run --locked --directory prototypes/faddeeva python -m pytest -q
 
   validation:
-    name: Accuracy against Arb (computed at run time)
+    name: Accuracy against Arb (computed at run time) and TIPS-2021 against HAPI
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

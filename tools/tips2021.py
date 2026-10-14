@@ -65,7 +65,8 @@ ALLOWED = {
 # Tables whose lowest temperatures are unphysical start here (K). For H2S the ratio
 # Q(31_2)/Q(31_1) should be about 1 and Q(31_3)/Q(31_1) about 4 (the ratio of the nuclear-spin
 # degeneracies), but they are 0.44 and 1.77 at 2 K, 1.43 and 5.72 at 6 K and 1.03 and 4.11 at
-# 20 K; from 30 K they are within 0.6% of it.
+# 20 K; from 30 K to about 300 K they are within 0.6% of it (they drift, as expected
+# physically, to 1.5% at 1000 K and 5.5% at 4000 K).
 MIN_TEMPERATURE = {"31_2": 30.0, "31_3": 30.0}
 FORTRAN_ZIP = "TIPS_2021.zip"
 FORTRAN_FILE = "BD_TIPS_2021.FOR"
