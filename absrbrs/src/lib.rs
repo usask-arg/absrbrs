@@ -5,5 +5,8 @@
 #![warn(missing_docs)]
 
 pub mod error;
+pub mod faddeeva;
+#[cfg(test)]
+mod test_data;
 
 pub use error::{Error, Result};
