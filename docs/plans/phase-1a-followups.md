@@ -128,7 +128,9 @@ and the TIPS notice file and the safe `.QTpy` conversion, under the Licence gate
 - Notices for statically linked Rust crates. The wheel statically links the Rust crates that
   `absrbrs-py` and `absrbrs` depend on: pyo3, rust-numpy (BSD-2-Clause), ndarray, matrixmultiply,
   num-integer, rawpointer, rustc-hash and portable-atomic-util (MIT or Apache-2.0), num-complex,
-  thiserror, and the rest of the lockfile's runtime tree. Their licences require reproducing the
+  thiserror, and the rest of the lockfile's runtime tree. Phase 1b adds serde_json, now a core
+  dependency, with serde_core and itoa (MIT or Apache-2.0), memchr (Unlicense or MIT) and zmij
+  (MIT). Their licences require reproducing the
   copyright and permission notices in binary redistributions. Before the first wheel is published,
   add a generated notice file for the bundled crates (for example with `cargo-about`), list it in
   `pyproject.toml` `license-files`, and add a paragraph to `THIRD_PARTY.md`; or record an explicit

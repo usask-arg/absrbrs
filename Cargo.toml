@@ -12,6 +12,8 @@ repository = "https://github.com/usask-arg/absrbrs"
 [workspace.dependencies]
 num-complex = "0.4.6"
 thiserror = "2"
+# float_roundtrip makes f64 parsing correctly rounded; without it, values can be 1 ulp off.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [profile.release]
 lto = "fat"

@@ -9,21 +9,13 @@ value error <= 1e-6 relative to Re w, derivative error <= 1e-5 relative to ``|w'
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from absrbrs import _absrbrs
+from absrbrs._convert import numeric
 
 __all__ = ["faddeeva", "voigt_kernel"]
-
-
-def _numeric(name: str, value: ArrayLike, kinds: str, what: str) -> NDArray[Any]:
-    array = np.asarray(value)
-    if array.dtype.kind not in kinds:
-        raise TypeError(f"{name} must be {what}, not an array of dtype {array.dtype}")
-    return array
 
 
 def faddeeva(
@@ -66,7 +58,7 @@ def faddeeva(
     """
     # ravel() copies to a contiguous 1-D array when needed (np.ascontiguousarray would turn a
     # 0-d input into 1-D).
-    array = np.asarray(_numeric("z", z, "iufc", "numbers"), dtype=np.complex128)
+    array = np.asarray(numeric("z", z, "iufc", "numbers"), dtype=np.complex128)
     w, dw = _absrbrs.faddeeva_w(array.ravel(), tier)
     return w.reshape(array.shape), dw.reshape(array.shape)
 
@@ -111,8 +103,8 @@ def voigt_kernel(
     gamma)`` with ``x = u / (sigma * sqrt(2))`` and ``y = gamma / (sigma * sqrt(2))``.
     """
     xb, yb = np.broadcast_arrays(
-        np.asarray(_numeric("x", x, "iuf", "real numbers"), dtype=np.float64),
-        np.asarray(_numeric("y", y, "iuf", "real numbers"), dtype=np.float64),
+        np.asarray(numeric("x", x, "iuf", "real numbers"), dtype=np.float64),
+        np.asarray(numeric("y", y, "iuf", "real numbers"), dtype=np.float64),
     )
     shape = xb.shape
     k, k_x, k_y = _absrbrs.voigt_kernel(xb.ravel(), yb.ravel(), tier)

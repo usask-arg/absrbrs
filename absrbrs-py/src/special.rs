@@ -2,36 +2,20 @@
 //! (the Python layer broadcasts and flattens); values are validated here.
 
 use absrbrs::faddeeva::{self, Complex64, Tier};
-use numpy::{IntoPyArray, PyArray1, PyArrayMethods};
-use pyo3::exceptions::{PyBufferError, PyMemoryError};
+use numpy::{IntoPyArray, PyArray1};
 use pyo3::prelude::*;
 
-use crate::errors::to_pyerr;
+use crate::errors::{borrow, invalid, reserved};
 
 fn tier(py: Python<'_>, name: &str) -> PyResult<Tier> {
     match name {
         "fast" => Ok(Tier::Fast),
         "accurate" => Ok(Tier::Accurate),
-        _ => Err(to_pyerr(
+        _ => Err(invalid(
             py,
-            absrbrs::Error::InvalidInput(format!(
-                "tier must be 'fast' or 'accurate', not {name:?}"
-            )),
+            format!("tier must be 'fast' or 'accurate', not {name:?}"),
         )),
     }
-}
-
-/// An empty vector with room for `len` values, or `MemoryError` (spec §9.2: fallible allocation).
-fn reserved<T>(len: usize, what: &str) -> PyResult<Vec<T>> {
-    let mut v = Vec::new();
-    v.try_reserve_exact(len).map_err(|e| {
-        PyMemoryError::new_err(format!("cannot allocate {len} values for {what}: {e}"))
-    })?;
-    Ok(v)
-}
-
-fn invalid(py: Python<'_>, message: String) -> PyErr {
-    to_pyerr(py, absrbrs::Error::InvalidInput(message))
 }
 
 /// w(z) and w′(z) at every z (Im z ≥ 0, finite).
@@ -46,9 +30,7 @@ pub fn faddeeva_w<'py>(
     Bound<'py, PyArray1<Complex64>>,
 )> {
     let tier = self::tier(py, tier)?;
-    let z = z
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
+    let z = borrow(&z)?;
     let z = z.as_slice()?;
     let mut w = reserved(z.len(), "w")?;
     let mut dw = reserved(z.len(), "dw")?;
@@ -85,12 +67,8 @@ pub fn voigt_kernel<'py>(
     Bound<'py, PyArray1<f64>>,
 )> {
     let tier = self::tier(py, tier)?;
-    let x = x
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
-    let y = y
-        .try_readonly()
-        .map_err(|e| PyBufferError::new_err(e.to_string()))?;
+    let x = borrow(&x)?;
+    let y = borrow(&y)?;
     let (x, y) = (x.as_slice()?, y.as_slice()?);
     if x.len() != y.len() {
         return Err(invalid(

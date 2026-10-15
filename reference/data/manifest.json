@@ -8,6 +8,14 @@
       "records": 74,
       "sha256": "cb14d4a72be80ea00db2796f28ab6854c2de617fe685d9257507ad59e2196316"
     },
+    "line_state.jsonl": {
+      "flint": "3.6.0",
+      "generator": "line_state",
+      "precision_bits": 256,
+      "python_flint": "0.9.0",
+      "records": 192,
+      "sha256": "7e6ea0244134c8186ac0b90e51a2e5ee5c7e830f5f208637f72ad283ba697cae"
+    },
     "weideman.jsonl": {
       "flint": "3.6.0",
       "generator": "weideman",

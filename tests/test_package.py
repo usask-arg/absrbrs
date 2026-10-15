@@ -53,7 +53,15 @@ def test_public_names():
 
 
 def test_test_hooks_live_outside_the_extension_namespace():
-    assert set(_absrbrs.__all__) == {"__version__", "faddeeva_w", "voigt_kernel"}
+    assert set(_absrbrs.__all__) == {
+        "LineList",
+        "__version__",
+        "faddeeva_w",
+        "isotopologue_info",
+        "molecule_id",
+        "tips2021",
+        "voigt_kernel",
+    }
     testing = importlib.import_module("absrbrs._absrbrs._testing")
     assert testing is _absrbrs._testing
     assert set(testing.__all__) == {"raise_core_error"}

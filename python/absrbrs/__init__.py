@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _version
 
-from absrbrs import _absrbrs, special
+from absrbrs import _absrbrs, partition, special
 from absrbrs.errors import (
     AbsrbrsError,
     InvalidInputError,
@@ -11,14 +11,17 @@ from absrbrs.errors import (
     OutsideTableError,
     ParseError,
 )
+from absrbrs.lines import LineList
 
 __all__ = [
     "AbsrbrsError",
     "InvalidInputError",
+    "LineList",
     "MissingPartitionFunctionError",
     "OutsideTableError",
     "ParseError",
     "__version__",
+    "partition",
     "special",
 ]
 
